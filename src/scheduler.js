@@ -10,12 +10,15 @@ let started = false;
 const timers = [];
 
 function every(ms, fn) {
+  // setTimeout ограничен 2^31-1 мс (~24,8 дня) — длинные каденции клипуются
+  // (месячная фактически сработает через ~24,8 дня — приемлемый дрейф)
+  const delay = Math.min(ms, 2147483647);
   const run = () => {
     const h = setTimeout(() => {
       const i = timers.indexOf(h);
       if (i >= 0) timers.splice(i, 1);
       Promise.resolve(fn()).catch(() => {}).finally(run);
-    }, ms);
+    }, delay);
     timers.push(h);
   };
   run();

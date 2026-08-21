@@ -80,20 +80,27 @@ function parseCapex(j) {
   return { annuals, ttm: last.val, ttmGrowth: (last.val / prev.val - 1) * 100 };
 }
 
+const CAPEX_CONCEPTS = [
+  'PaymentsToAcquirePropertyPlantAndEquipment',
+  'PaymentsToAcquireProductiveAssets', // Amazon и часть старых филлингов
+];
+
 async function fetchCapex({ fetchImpl = fetch } = {}) {
   const UA = { 'User-Agent': 'portfolio-terminal/1.0 (personal research)' };
   const out = [];
   for (const h of HYPERSCALERS) {
-    try {
-      const url = `https://data.sec.gov/api/xbrl/companyconcept/CIK${h.cik}/us-gaap/PaymentsToAcquirePropertyPlantAndEquipment.json`;
-      const r = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(30000) });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const p = parseCapex(await r.json());
-      if (p) out.push({ t: h.t, ttm: p.ttm, growth: +p.ttmGrowth.toFixed(1) });
-    } catch (e) {
-      out.push({ t: h.t, error: e.message });
+    let p = null, lastErr = 'нет данных';
+    for (const concept of CAPEX_CONCEPTS) {
+      try {
+        const url = `https://data.sec.gov/api/xbrl/companyconcept/CIK${h.cik}/us-gaap/${concept}.json`;
+        const r = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(30000) });
+        if (!r.ok) { lastErr = 'HTTP ' + r.status; continue; }
+        p = parseCapex(await r.json());
+        if (p) break;
+      } catch (e) { lastErr = e.message; }
     }
-    await new Promise(res => setTimeout(res, 300)); // бережём EDGAR
+    out.push(p ? { t: h.t, ttm: p.ttm, growth: +p.ttmGrowth.toFixed(1) } : { t: h.t, error: lastErr });
+    await new Promise(res => setTimeout(res, 500)); // бережём EDGAR
   }
   const ok = out.filter(x => x.growth != null);
   return { companies: out, avgGrowth: ok.length ? ok.reduce((s, x) => s + x.growth, 0) / ok.length : null };
