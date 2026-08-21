@@ -45,4 +45,60 @@ function nelderMead(f, x0, { maxIter = 800, tol = 1e-9 } = {}) {
   return { x: pts[idx[0]], fx: vals[idx[0]] };
 }
 
-module.exports = { nelderMead };
+// ── GARCH(1,1): квази-MLE Нелдером-Мидом ──
+// Параметры через преобразование (гарантируют стационарность и позитивность):
+//   ω = e^u, α = 0.98·σ(a), β = (1−α)·σ(b)
+const sigmoid = x => 1 / (1 + Math.exp(-x));
+
+function fitGARCH(rets) {
+  const n = rets.length;
+  const mu = rets.reduce((s, v) => s + v, 0) / n;
+  const r = rets.map(v => v - mu);
+  const var0 = r.reduce((s, v) => s + v * v, 0) / Math.max(1, n - 1);
+
+  const negLL = p => {
+    const omega = Math.exp(p[0]);
+    const alpha = 0.98 * sigmoid(p[1]);
+    const beta = (1 - alpha) * sigmoid(p[2]);
+    let sig2 = var0, ll = 0;
+    for (let t = 0; t < n; t++) {
+      ll += 0.5 * (Math.log(2 * Math.PI) + Math.log(sig2) + r[t] * r[t] / sig2);
+      sig2 = omega + alpha * r[t] * r[t] + beta * sig2;
+    }
+    return ll;
+  };
+
+  const starts = [[0.08, 0.90], [0.15, 0.80], [0.05, 0.70]].map(([al, be]) => {
+    const om = Math.max(var0 * (1 - al - be), 1e-12);
+    const x1 = al / 0.98;
+    const be2 = Math.min(0.99, be / (1 - al));
+    return [Math.log(om), Math.log(x1 / (1 - x1)), Math.log(be2 / (1 - be2))];
+  });
+  let best = null;
+  for (const s of starts) {
+    const res = nelderMead(negLL, s, { maxIter: 600 });
+    if (!best || res.fx < best.fx) best = res;
+  }
+  const omega = Math.exp(best.x[0]);
+  const alpha = 0.98 * sigmoid(best.x[1]);
+  const beta = (1 - alpha) * sigmoid(best.x[2]);
+  // дисперсия прогноза на следующий день
+  let sig2 = var0;
+  for (let t = 0; t < n; t++) sig2 = omega + alpha * r[t] * r[t] + beta * sig2;
+  return { omega, alpha, beta, ll: -best.fx, sig2next: sig2, muRet: mu, n };
+}
+
+// E[σ²] на h дней вперёд: v_h = ω̄ + (α+β)^{h−1}(σ²_next − ω̄)
+function garchForecast(fit, horizonDays) {
+  const persist = fit.alpha + fit.beta;
+  const longRun = fit.omega / Math.max(1e-12, 1 - persist);
+  let acc = 0;
+  for (let h = 1; h <= horizonDays; h++) acc += longRun + Math.pow(persist, h - 1) * (fit.sig2next - longRun);
+  return {
+    avgVar: acc / horizonDays,
+    varAt: longRun + Math.pow(persist, horizonDays - 1) * (fit.sig2next - longRun),
+    longRunVar: longRun,
+  };
+}
+
+module.exports = { nelderMead, fitGARCH, garchForecast };
