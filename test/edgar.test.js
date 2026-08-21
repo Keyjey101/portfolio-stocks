@@ -12,7 +12,7 @@ const MAP = {
 test('parseTickerMap: тикер → 10-значный CIK, дубликат не ломает', () => {
   const m = parseTickerMap(MAP);
   assert.strictEqual(m.AAPL, '0000320193');
-  assert.strictEqual(m.WMT, '000104169');
+  assert.strictEqual(m.WMT, '0000104169');
   assert.strictEqual(Object.keys(m).length, 2);
 });
 
