@@ -5,7 +5,7 @@ const { chart, sma, spark, pool } = require('./yahoo');
 
 // ── Сигналы ──
 function vixSignal(v) {
-  if (v == null) return { z:'—', mult:1, c:'g', txt:'нет данных' };
+  if (v == null) return { z:'—', mult:1, c:'d', txt:'нет данных' };
   if (v < 16)  return { z:'БЛАГОДУШИЕ', mult:1,   c:'y', txt:'базовый DCA, резерв не трогать' };
   if (v < 22)  return { z:'НОРМА',      mult:1,   c:'g', txt:'базовый DCA' };
   if (v < 30)  return { z:'СТРАХ',      mult:2,   c:'o', txt:'DCA ×2' };
@@ -14,6 +14,7 @@ function vixSignal(v) {
 }
 
 function trendSignal(px, ma50, ma200, hi52) {
+  if (px == null) return { z:'—', c:'d', txt:'нет данных', dd:null };
   const dd = hi52 ? (px / hi52 - 1) * 100 : 0;
   if (dd <= -15) return { z:'ПРОСАДКА 15%+', mult:3, c:'r', txt:'разворачивать резерв', dd };
   if (ma200 && px < ma200) return { z:'НИЖЕ 200MA', mult:2, c:'o', txt:'DCA ×2, включать уровни', dd };
@@ -22,12 +23,23 @@ function trendSignal(px, ma50, ma200, hi52) {
 }
 
 function yieldSignal(closes) {
-  if (!closes || closes.length < 21) return { z:'—', c:'g', txt:'нет данных', chg:0 };
+  // нет данных — отдельное состояние: оно НЕ должно засчитываться
+  // как сработавший (зелёный) сигнал в вердикте
+  if (!closes || closes.length < 21) return { z:'—', c:'d', txt:'нет данных', chg:0, ok:false };
   const now = closes.at(-1), then = closes.at(-21);
   const chg = (now - then) * 100; // б.п.
-  if (chg >= 25)  return { z:'РОСТ СТАВОК', c:'r', txt:'сжатие мультипликаторов → половинные транши', chg };
-  if (chg <= -25) return { z:'СТАВКИ ВНИЗ', c:'g', txt:'★ давление снято — лучшее окно', chg };
-  return { z:'СТАБИЛЬНО', c:'y', txt:'нейтрально', chg };
+  if (chg >= 25)  return { z:'РОСТ СТАВОК', c:'r', txt:'сжатие мультипликаторов → половинные транши', chg, ok:true };
+  if (chg <= -25) return { z:'СТАВКИ ВНИЗ', c:'g', txt:'★ давление снято — лучшее окно', chg, ok:true };
+  return { z:'СТАБИЛЬНО', c:'y', txt:'нейтрально', chg, ok:true };
+}
+
+// какие из трёх сигналов сработали; «нет данных» никогда не срабатывает
+function firesOf(sV, sT, sY) {
+  return [
+    sV.c === 'r' || sV.c === 'o',
+    sT.c === 'r' || sT.c === 'o',
+    sY.ok === true && sY.c === 'g',
+  ];
 }
 
 function levelStatus(px, lv) {
@@ -61,10 +73,8 @@ async function build() {
   const sT = trendSignal(spxPx, ma50, ma200, spx?.hi52);
   const sY = yieldSignal(tnxCloses);
 
-  const green = [sV.c === 'r' || sV.c === 'o', sT.c === 'r' || sT.c === 'o', sY.c === 'g'].filter(Boolean).length;
-  const fV = sV.c === 'r' || sV.c === 'o';
-  const fT = sT.c === 'r' || sT.c === 'o';
-  const fY = sY.c === 'g';
+  const [fV, fT, fY] = firesOf(sV, sT, sY);
+  const green = [fV, fT, fY].filter(Boolean).length;
   const clamp01 = x => Math.max(0, Math.min(1, x));
   const dd = sT.dd || 0;
   // близость к срабатыванию: 0 — далеко, 1 — порог достигнут
@@ -140,4 +150,4 @@ function getData() {
   return cache.promise;
 }
 
-module.exports = { getData };
+module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf };
