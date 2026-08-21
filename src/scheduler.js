@@ -1,5 +1,7 @@
-// Фоновый прогрев расчётных кэшей (профиль «экономно», спек §3.2).
+// Фоновый прогрев расчётных кэшей (профиль «экономно», спек §3.2):
+// факторы и уровни — ежедневно, Монте-Карло — еженедельно.
 const DAY = 24 * 3600e3;
+const WEEK = 7 * DAY;
 let started = false;
 const timers = [];
 
@@ -7,9 +9,17 @@ function start() {
   if (started) return;
   started = true;
   const { runFactors } = require('./lab/factors');
-  const warm = () => runFactors().catch(e => console.error('scheduler: factors:', e.message));
-  timers.push(setTimeout(warm, 30e3));   // прогрев после старта
-  timers.push(setInterval(warm, DAY));   // и далее раз в сутки
+  const { runLevels } = require('./lab/levels');
+  const { runMC } = require('./lab/mc');
+  const warmDaily = () => {
+    runFactors().catch(e => console.error('scheduler: factors:', e.message));
+    runLevels().catch(e => console.error('scheduler: levels:', e.message));
+  };
+  const warmWeekly = () => runMC().catch(e => console.error('scheduler: mc:', e.message));
+  timers.push(setTimeout(warmDaily, 30e3));
+  timers.push(setInterval(warmDaily, DAY));
+  timers.push(setTimeout(warmWeekly, 90e3));
+  timers.push(setInterval(warmWeekly, WEEK));
 }
 
 function stop() {

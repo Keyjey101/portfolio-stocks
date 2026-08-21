@@ -8,6 +8,7 @@ const path = require('path');
 const { getData, getCalendar } = require('./signals');
 const { runFactors } = require('./lab/factors');
 const { runLevels } = require('./lab/levels');
+const { runMC } = require('./lab/mc');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -56,6 +57,21 @@ function start() {
       try {
         const force = req.url.includes('force=1');
         const D = await runLevels({ force });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(D));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/mc') {
+      // Монте-Карло #4: HMM-режимы + блочный бутстрап, кэш 7 дней,
+      // симуляции в worker_threads; ?force=1 — пересчитать
+      try {
+        const force = req.url.includes('force=1');
+        const D = await runMC({ force });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(D));
       } catch (e) {
