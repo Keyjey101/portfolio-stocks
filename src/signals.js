@@ -60,7 +60,9 @@ function watchStatus(px, lv) {
   if (!lv || px == null) return { s:'—', c:'d' };
   const [t1, t2, t3] = lv;
   const lowest = t3 || t2 || t1;
-  if (lowest && px < lowest) return { s:'⏷ ниже зоны — пересмотреть', c:'y' };
+  // лёгкий прокол под уровень — шум, уровень достигнут;
+  // глубокий (>5% под зоной) — зона устарела, тезис перепроверить
+  if (lowest && px < lowest * 0.95) return { s:'⏷ ниже зоны — пересмотреть', c:'y' };
   if (t3 && px <= t3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
   if (t2 && px <= t2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
   if (t1 && px <= t1) return { s:`✓ T1 ≤${t1}`, c:'g' };
