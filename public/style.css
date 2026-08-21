@@ -184,6 +184,16 @@ body.ready .tape{opacity:1}
 .rsub{flex-basis:100%;margin:-3px 0 0 18px;font:11px var(--mono);color:var(--ink3)}
 .oc{color:var(--o)}
 
+/* ═══ Календарь отчётов ═══ */
+.cal{margin:12px 0 0}
+.cal .core{padding:12px 20px 13px}
+.calbody{display:flex;flex-wrap:wrap;gap:6px 24px;font:12.5px var(--mono);color:var(--ink2)}
+.ci b{color:var(--ink);margin-right:8px;font-weight:600}
+.ci i{font-style:normal;color:var(--y);margin-left:8px;font-size:10.5px}
+.ci.hot b{color:var(--o)}
+tr.earn-soon td{background:rgba(88,127,168,.06)}
+tr.earn-soon .tk::after{content:'📅';font-size:10px;margin-left:6px}
+
 /* ═══ Сигналы: чипы ═══ */
 .sig{margin:16px 0 0}
 #vbreak{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:10px}

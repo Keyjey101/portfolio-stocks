@@ -5,7 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const { getData } = require('./signals');
+const { getData, getCalendar } = require('./signals');
 
 const PORT = +(process.env.PORT || 3000);
 const PUB = path.join(__dirname, '..', 'public');
@@ -24,6 +24,20 @@ function start() {
     const url = decodeURIComponent(req.url.split('?')[0]);
 
     if (url === '/favicon.ico') { res.writeHead(204).end(); return; }
+
+    if (url === '/api/calendar') {
+      // календарь отчётов: тяжёлый (quoteSummary на каждый тикер) — грузится
+      // клиентом отдельно после основных данных; кэш 6 ч на сервере
+      try {
+        const cal = await getCalendar();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(cal));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, items: [] }));
+      }
+      return;
+    }
 
     if (url === '/api/data') {
       try {

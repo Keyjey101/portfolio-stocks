@@ -127,6 +127,7 @@ function boot(){
       document.body.classList.add('ready');
       b.classList.add('hide');
       startRing();
+      fetchCalendar();
     },420);
   }).catch(function(e){
     bootTimers.forEach(clearTimeout);stopFun();
@@ -136,6 +137,35 @@ function boot(){
   });
 }
 $('#bootRetry').addEventListener('click',boot);
+
+/* ───────────── календарь отчётов ───────────── */
+var CAL=null;
+function fetchCalendar(){
+  fetch('/api/calendar',{cache:'no-store'}).then(function(r){return r.json()}).then(function(D){
+    if(!D.ok||!D.items||!D.items.length){CAL=null;$('#calSec').classList.add('hide');markEarnings();return}
+    CAL=D;renderCalendar();
+  }).catch(function(){CAL=null;$('#calSec').classList.add('hide');markEarnings()});
+}
+function renderCalendar(){
+  $('#calSec').classList.remove('hide');
+  $('#calBody').innerHTML=CAL.items.map(function(it){
+    var d=new Date(it.ts);
+    var dd=('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2);
+    return '<span class="ci'+(it.days<=7?' hot':'')+'"><b>'+it.t+'</b>'+dd
+      +(it.days<=7?'<i>через '+it.days+' дн</i>':'')+'</span>';
+  }).join('');
+  markEarnings();
+}
+function markEarnings(){
+  $$('tbody tr[data-t]').forEach(function(tr){tr.classList.remove('earn-soon')});
+  if(!CAL)return;
+  CAL.items.forEach(function(it){
+    if(it.days<=7){
+      var tr=document.querySelector('tbody tr[data-t="'+it.t+'"]');
+      if(tr)tr.classList.add('earn-soon');
+    }
+  });
+}
 
 /* ───────────── рендер ───────────── */
 var DATA=null,prevPx={};
@@ -277,6 +307,7 @@ function renderAll(){
   $('#failed').textContent=failed.length?'Не загрузились: '+failed.map(function(r){return r.t}).join(', '):'';
 
   attachSort();applyFilter();
+  markEarnings();
 }
 
 function renderSpx(D){
@@ -480,6 +511,7 @@ function refresh(auto){
     toast('Ошибка обновления: '+e.message,'r');
   }).then(function(){
     fetching=false;btn.classList.remove('spin');startRing();
+    fetchCalendar();
   });
 }
 $('#btnRefresh').addEventListener('click',function(){refresh(false)});

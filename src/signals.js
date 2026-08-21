@@ -1,7 +1,7 @@
 // Рыночные сигналы, вердикт и сборка данных (с кэшем 25 сек)
 
 const { positions, posSource, WATCH, CASH, RULES } = require('./portfolio');
-const { chart, sma, spark, pool } = require('./yahoo');
+const { chart, sma, spark, pool, earningsDate } = require('./yahoo');
 const { rulesCheck, overdueDays } = require('./rules');
 
 // '2026-08-06' → '06.08'
@@ -183,7 +183,30 @@ async function build() {
   };
 }
 
-// ── Кэш данных (25 сек), единый fetch на параллельных клиентов ──
+// ── Календарь отчётов на 30 дней: позиции + вотчлист, кэш 6 ч ──
+const CAL_TTL = 6 * 3600e3;
+const calCache = { ts: 0, data: null, promise: null };
+
+async function getCalendar() {
+  if (calCache.data && Date.now() - calCache.ts < CAL_TTL) return calCache.data;
+  if (calCache.promise) return calCache.promise;
+  calCache.promise = (async () => {
+    const list = await positions().catch(() => []);
+    const symbols = [...new Set([...list.map(p => p.t), ...WATCH.map(w => w.t)])]
+      .filter(t => /^[A-Z][A-Z0-9.-]*$/.test(t)); // только обыкновенные тикеры
+    const items = [];
+    await pool(symbols, async t => {
+      const e = await earningsDate(t).catch(() => null);
+      if (e) items.push({ t, ts: e.ts, days: e.days });
+    }, 6);
+    items.sort((a, b) => a.ts - b.ts);
+    return { ok: true, generatedAt: new Date().toISOString(), items };
+  })()
+    .then(data => { calCache.data = data; calCache.ts = Date.now(); return data; })
+    .catch(e => ({ ok: false, error: String(e.message || e), items: [] }))
+    .finally(() => { calCache.promise = null; });
+  return calCache.promise;
+}
 const cache = { ts: 0, data: null, promise: null };
 function getData() {
   if (cache.data && Date.now() - cache.ts < 25000) return Promise.resolve(cache.data);
@@ -194,4 +217,4 @@ function getData() {
   return cache.promise;
 }
 
-module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf };
+module.exports = { getData, getCalendar, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf };
