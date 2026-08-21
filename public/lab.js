@@ -299,3 +299,41 @@ function hookBR(){
   });
 }
 fetch('/api/lab/baserates').then(function(r){return r.json()}).then(renderBR).catch(function(e){$('#brSub').textContent='ошибка: '+e.message});
+
+/* ============== капитальный цикл (#8) ============== */
+function renderCC(D){
+  var d=D.data;
+  $('#ccSub').textContent='композит z='+n2(d.composite)+' · стадия: '+esc(d.stageLabel)+(D.cached?' · кэш':'');
+  var legs=Object.keys(d.legs).map(function(k){
+    var z=d.legs[k];
+    return '<div class="mc-row"><span>'+esc(k)+'</span><b class="'+(z>=0?'up':'dn')+'">z '+n2(z)+'</b></div>';
+  }).join('');
+  var capex=d.capex.companies.map(function(c){
+    return '<div class="mc-row"><span>'+c.t+'</span><b>'+(c.growth!=null?('TTM капекс '+(c.ttm/1e9).toFixed(1)+'$ млрд · г/г '+(c.growth>=0?'+':'')+n2(c.growth)+'%'):('ошибка: '+esc(c.error||'')))+'</b></div>';
+  }).join('');
+  var ks=d.killSwitch&&d.killSwitch.count>=2
+    ?'<div class="lab-warn">kill-switch зона: '+d.killSwitch.count+' из 3 ног в сжатии ('+esc(d.killSwitch.legs.join(', '))+')</div>':'';
+  var gpu=d.gpuRent
+    ?'<div class="mc-row"><span>аренда GPU (ручной ввод)</span><b>$'+n2(d.gpuRent.usdPerGpuHour)+'/GPU·ч от '+new Date(d.gpuRent.date).toLocaleDateString('ru-RU')+'</b></div>'
+    :'';
+  $('#ccCard').innerHTML='<div class="mc-grid"><div><div class="ph">Ноги композита (z за 60 дн)</div>'+legs+ks
+    +'<div class="ph" style="margin-top:12px">Капекс гиперскейлеров (XBRL EDGAR, FY)</div>'+capex
+    +(d.capex.avgGrowth!=null?'<div class="mc-row"><span>средний рост</span><b>'+(d.capex.avgGrowth>=0?'+':'')+n2(d.capex.avgGrowth)+'%</b></div>':'')
+    +'<div class="ph" style="margin-top:12px">Аренда GPU — ручной слот</div>'+gpu
+    +'<div class="fal-new"><input id="gpuIn" type="number" min="0" step="0.01" placeholder="$/GPU·ч, напр. 2.10" style="width:170px"><button class="lab-btn" id="gpuBtn">Записать</button></div>'
+    +'</div><div><div class="ph">История композита по месяцам</div>'
+    +d.history.map(function(h){
+      return '<div class="mc-row"><span>'+h.month+'</span><b>z '+n2(h.composite)+' · '+['сжатие','охлаждение','расширение','перегрев'][h.stage]+'</b></div>';
+    }).join('')
+    +'<div class="cs mut" style="margin-top:8px">Стадия — прокси спроса по рыночным рядам; капекс — факт из отчётов. Ручной ввод аренды GPU дополняет картину, если есть источник.</div>'
+    +'</div></div>';
+  var g=$('#gpuBtn');
+  if(g)g.addEventListener('click',function(){
+    var v=+($('#gpuIn').value||0); if(!(v>0)){alert('введи цену');return}
+    g.disabled=true;
+    fetch('/api/lab/capcycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'gpu',usd:v})})
+      .then(function(r){return r.json()}).then(function(j){ if(!j.ok)throw new Error(j.error); location.reload(); })
+      .catch(function(e){alert(e.message);g.disabled=false});
+  });
+}
+fetch('/api/lab/capcycle').then(function(r){return r.json()}).then(renderCC).catch(function(e){$('#ccSub').textContent='ошибка: '+e.message});

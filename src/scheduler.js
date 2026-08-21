@@ -80,6 +80,9 @@ function start() {
       .catch(e => console.error('scheduler: counterfactuals:', e.message));
   };
 
+  // #8 капцикл: композит ежемесячно, капекс качается внутри (кэш EDGAR 6ч→89д агенты)
+  const monthlyCapcycle = () => require('./lab/capcycle').runCapcycle().catch(e => console.error('scheduler: capcycle:', e.message));
+
   setTimeout(warmDaily, 30e3);
   every(DAY, warmDaily);
   setTimeout(warmWeekly, 90e3);
@@ -88,6 +91,7 @@ function start() {
   setTimeout(snapshotCheck, 60e3);
   every(15 * 60e3, snapshotCheck);
   every(WEEK, weeklyJournal);
+  every(30 * DAY, monthlyCapcycle);
 }
 
 function stop() {

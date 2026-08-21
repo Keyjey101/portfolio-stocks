@@ -14,6 +14,7 @@ const falsify = require('./lab/falsify');
 const committee = require('./lab/committee');
 const journal = require('./lab/journal');
 const baserates = require('./lab/baserates');
+const capcycle = require('./lab/capcycle');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -224,6 +225,30 @@ function start() {
           res.end(JSON.stringify({ ok: true, backfill: out }));
         } else {
           res.end(JSON.stringify({ ok: true, data: baserates.getAggregates() }));
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/capcycle') {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          if (b.action === 'gpu') {
+            capcycle.addGpuRent(b.usd);
+            const D = await capcycle.runCapcycle({ force: true });
+            res.end(JSON.stringify({ ok: true, data: D }));
+          } else {
+            res.writeHead(400).end('unknown action');
+          }
+        } else {
+          const force = req.url.includes('force=1');
+          const D = await capcycle.runCapcycle({ force });
+          res.end(JSON.stringify({ ok: true, data: D }));
         }
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
