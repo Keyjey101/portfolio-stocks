@@ -207,6 +207,38 @@ function renderSig(D){
   setTimeout(function(){$$('.vbar i').forEach(function(el){el.style.width=el.dataset.w+'%'})},250);
 }
 
+/* панель правил портфеля */
+function fmtPct(v){return v==null?'—':(v*100).toFixed(1).replace('.',',')+'%'}
+function renderRules(D){
+  var R=D.rules, sec=$('#rulesSec');
+  if(!R){sec.classList.add('hide');return}
+  sec.classList.remove('hide');
+  var ai=R.ai, cash=R.cash, max=R.max, br=R.broken;
+  var rows=[
+    {c:ai.c,name:'AI-ядро',val:fmtPct(ai.pct)+' / '+fmtPct(ai.target),
+     txt:ai.c==='r'?'превышение '+money(ai.excess):'в рамках',
+     tc:ai.c==='r'?'dn':'up',
+     sub:'+ скрытая бета (индексы ×0,3): '+fmtPct(ai.hiddenPct)},
+    {c:cash.c,name:'Кэш',val:fmtPct(cash.pct)+' / '+fmtPct(cash.target),
+     txt:cash.short>0?'недобор '+money(cash.short):'цель достигнута',
+     tc:cash.short>0?'oc':'up'},
+    {c:max.c,name:'Макс. имя',val:(max.t||'—')+' '+(max.t?fmtPct(max.pct)+' / '+fmtPct(max.target):''),
+     txt:max.c==='r'?'превышен':'',
+     tc:max.c==='r'?'dn':'up'},
+    {c:br.c,name:'Повреждённые тезисы',val:br.val>0?fmtPct(br.pct)+' ('+money(br.val)+')':'нет',
+     txt:br.val>0?'пересмотреть':'чисто',
+     tc:br.val>0?'oc':'up',
+     sub:br.overdue&&br.overdue.length?'просрочен пересмотр: '+br.overdue.join(', '):''}
+  ];
+  $('#rulesBody').innerHTML=rows.map(function(r){
+    return '<div class="rrow"><i class="led" style="--cc:'+COL[r.c]+'"></i>'
+      +'<span class="rname">'+r.name+'</span><span class="rval">'+r.val+'</span>'
+      +(r.txt?'<span class="rtxt '+r.tc+'">'+r.txt+'</span>':'')
+      +(r.sub?'<span class="rsub">'+r.sub+'</span>':'')
+      +'</div>';
+  }).join('');
+}
+
 function renderAll(){
   var D=DATA;
   $('#stamp').textContent='обновлено '+new Date(D.generatedAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -214,6 +246,7 @@ function renderAll(){
   setMood(D.verdict.c);
   renderTape(D);
   renderMast(D);
+  renderRules(D);
   renderSig(D);
 
   var t=totals(D);

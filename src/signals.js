@@ -1,7 +1,8 @@
 // Рыночные сигналы, вердикт и сборка данных (с кэшем 25 сек)
 
-const { positions, posSource, WATCH, CASH } = require('./portfolio');
+const { positions, posSource, WATCH, CASH, RULES } = require('./portfolio');
 const { chart, sma, spark, pool } = require('./yahoo');
+const { rulesCheck } = require('./rules');
 
 // ── Сигналы ──
 function vixSignal(v) {
@@ -162,6 +163,7 @@ async function build() {
     posSource: posSource(),
     vixV, spxPx, ma50, ma200, y10, sV, sT, sY, verdict,
     rows, watch, total, byTag, cash: CASH,
+    rules: rulesCheck(rows, total, CASH, RULES),
     spxSpark: spark(spx?.closes ?? [], 120),
     vixSpark: spark(vix?.closes ?? [], 60),
     tnxSpark: spark(tnxCloses, 60),

@@ -80,4 +80,12 @@ const WATCH = [
 
 const CASH = 1000;
 
-module.exports = { positions, posSource, META, WATCH, CASH };
+// Правила книги — потолки, которые держали полгода; считает машина
+const RULES = {
+  aiCeiling: 0.35,      // AI-ядро: максимум 35% портфеля
+  cashTargetPct: 0.10,  // кэш: цель 10% от стоимости позиций
+  maxNamePct: 0.084,    // одно имя: максимум 8,4%
+  hiddenAiFactor: 0.3,  // скрытая AI-бета индексов (VTI+ITOT × 0,3)
+};
+
+module.exports = { positions, posSource, META, WATCH, CASH, RULES };
