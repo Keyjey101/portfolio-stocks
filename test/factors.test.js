@@ -64,6 +64,19 @@ test('ENB: идентичные ряды ≈ 1, независимые ≈ 2', (
   assert.ok(indep.enb > 1.85, 'ENB независимых=' + indep.enb);
 });
 
+test('стресс-дней < 10 — режим не считается, corrJump пуст (не вводит в заблуждение)', () => {
+  const rnd = lcg(11), T = 120;
+  const mkt = Array.from({ length: T }, () => 0.002 + rnd() * 0.008); // ни одного дня < −2%
+  const x = mkt.map(v => v + rnd() * 0.002);
+  const prices = { F1: toPx(mkt), SPY: toPx(mkt), X: toPx(x) };
+  const res = analyzeFactorModel({
+    prices, positions: [{ t: 'X', tag: 'core', val: 100 }], factors: ['F1'], market: 'SPY',
+  });
+  assert.strictEqual(res.stress.n, 0);
+  assert.strictEqual(res.stress.dr, null, 'стресс-DR не считается');
+  assert.deepEqual(res.corrJump, [], 'corrJump пуст, а не «0 − ρнорм»');
+});
+
 test('стресс: дни рынка < −2% попадают в стресс-режим; корреляции осмысленные', () => {
   const rnd = lcg(5), T = 200;
   // стресс-дни варьируются вокруг −3%, обычные — вокруг +0,4%

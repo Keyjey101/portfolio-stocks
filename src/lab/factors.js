@@ -92,9 +92,13 @@ function analyzeFactorModel({ prices, positions, factors = FACTOR_PROXIES, marke
     const sumW = weights.reduce((s2, w, k) => s2 + w * sd(pick(R[tickers[k]], idx)), 0);
     regime.dr = sumW > 0 ? sd(pick(portRet, idx)) / sumW : null;
   }
-  const corrJump = tickers
-    .map(t => ({ t, jump: (regimes.stress.corr[t] ?? 0) - (regimes.normal.corr[t] ?? 0) }))
-    .sort((a, b) => b.jump - a.jump);
+  // скачок корреляции имеет смысл, только если посчитаны оба режима
+  const bothRegimes = regimes.stress.dr != null && regimes.normal.dr != null;
+  const corrJump = bothRegimes
+    ? tickers
+        .map(t => ({ t, jump: (regimes.stress.corr[t] ?? 0) - (regimes.normal.corr[t] ?? 0) }))
+        .sort((a, b) => b.jump - a.jump)
+    : [];
 
   return {
     window: WINDOW, tickers, factors, betas, exposure, byTag,

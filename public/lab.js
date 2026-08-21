@@ -23,6 +23,11 @@ function render(D){
     }).join('')+'</tbody>';
 
   $('#stressSub').textContent='стресс: SPY-день < −2% ('+D.stress.n+' дн) · норма: '+D.normal.n+' дн';
+  if(D.stress.dr==null||!D.corrJump.length){
+    $('#stressTable').innerHTML='<tbody><tr><td class="cs" style="padding:14px 4px;color:var(--ink3)">'
+      +'Стресс-дней за год меньше 10 ('+D.stress.n+') — условные корреляции не рассчитываются: выборка нерепрезентативна.</td></tr></tbody>';
+    return;
+  }
   var warn=D.corrJump.some(function(c){return c.jump>0.2})
     ?'<div class="lab-warn">Диверсификация сжимается в стрессе: Δρ &gt; 0,2 у части позиций — «реальные активы» могут синхронизироваться с рынком</div>':'';
   $('#stressTable').innerHTML='<thead><tr><th>Тикер</th><th class="num">ρ норма</th><th class="num">ρ стресс</th><th class="num">Δρ</th></tr></thead><tbody>'
