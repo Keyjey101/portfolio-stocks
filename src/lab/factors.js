@@ -103,4 +103,60 @@ function analyzeFactorModel({ prices, positions, factors = FACTOR_PROXIES, marke
   };
 }
 
-module.exports = { FACTOR_PROXIES, WINDOW, STEP, STRESS_RET, analyzeFactorModel };
+// ── I/O: заливка цен Yahoo, выравнивание по датам, суточный кэш ──
+const { chart, pool } = require('../yahoo');
+const { positions: defaultPositions } = require('../portfolio');
+const { readCache, writeCache } = require('../cache');
+
+const DAY = 24 * 3600e3;
+
+async function loadPrices(tickers) {
+  const out = {};
+  await pool(tickers, async t => {
+    const d = await chart(t, '1y').catch(() => null);
+    if (d && Array.isArray(d.closes) && d.closes.length > 120) out[t] = { closes: d.closes, ts: d.ts };
+  });
+  return out;
+}
+
+// пересечение дат всех рядов → выровненные числовые ряды
+function alignPrices(raw) {
+  const keys = Object.keys(raw);
+  if (!keys.length) return {};
+  let common = null;
+  for (const k of keys) {
+    const set = new Set(raw[k].ts.filter(Boolean));
+    common = common ? new Set([...common].filter(d => set.has(d))) : set;
+  }
+  const sorted = [...common].sort((a, b) => a - b);
+  const out = {};
+  for (const k of keys) {
+    const m = new Map(raw[k].ts.map((d, i) => [d, raw[k].closes[i]]));
+    out[k] = sorted.map(d => m.get(d));
+  }
+  return out;
+}
+
+let inflight = null;
+
+async function runFactors({ force = false, positionsLoader = defaultPositions, cacheName = 'factors' } = {}) {
+  if (!force) {
+    const cached = readCache(cacheName, DAY);
+    if (cached) return { ...cached, cached: true };
+    if (inflight) return inflight;
+  }
+  inflight = (async () => {
+    const list = (await positionsLoader()).filter(p => p.qty > 0 || p.t === 'ITOT');
+    const universe = [...new Set([...list.map(p => p.t), ...FACTOR_PROXIES])];
+    const raw = await loadPrices(universe);
+    const aligned = alignPrices(raw);
+    const okList = list.filter(p => aligned[p.t] && aligned[p.t].length > WINDOW + 10);
+    const model = okList.map(p => ({ t: p.t, tag: p.tag, val: (p.qty || 0) * aligned[p.t].at(-1) }));
+    const res = analyzeFactorModel({ prices: aligned, positions: model });
+    writeCache(cacheName, res);
+    return { ...res, cached: false };
+  })();
+  try { return await inflight; } finally { inflight = null; }
+}
+
+module.exports = { FACTOR_PROXIES, WINDOW, STEP, STRESS_RET, analyzeFactorModel, loadPrices, alignPrices, runFactors };
