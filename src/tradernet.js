@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const net = require('net');
 const tls = require('tls');
 const { execFile } = require('child_process');
+const { loadEnv } = require('./env');
 
 const DOMAIN = 'freedom24.com';
 const ROOT = path.join(__dirname, '..');
@@ -29,19 +30,7 @@ const PROXY_CACHE_FILE = path.join(ROOT, 'data', 'proxy.json');
 const TTL_MS = 60 * 1000;        // свежесть списка позиций
 const DIRECT_TIMEOUT_MS = 8000;  // прямой fetch (сайт может молча висеть)
 const PROBE_TIMEOUT_MS = 1200;   // проверка одного порта при сканировании
-const RESCAN_AFTER_MS = 5 * 60 * 1000; // пауза между автопоисками
-
-function loadEnv(file) {
-  const env = {};
-  let text = '';
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return env; }
-  for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
-    if (!m) continue; // комментарии и пустые строки
-    env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-  return env;
-}
+const RESCAN_AFTER_MS = 5 * 60 * 1000; // пауза между автопоиском
 
 const ENV = loadEnv(ENV_FILE);
 const PUBLIC_KEY = ENV.TRADERNET_PUBLIC_KEY || '';
