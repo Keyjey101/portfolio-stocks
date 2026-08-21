@@ -41,12 +41,17 @@ const META = {
   GILD:  { tag:'quality', lv:[128,115,102],    note:'DCA, защита' },
   BMY:   { tag:'quality', lv:[null,null,null], note:'' },
 
-  // Тезис повреждён — не покупать ни при какой цене
-  // st:'broken' — ⛔ в статусе; note хранит причину
-  PSN:   { tag:'quality', st:'broken', lv:null, note:'гайденс срезан дважды' },
-  ZTS:   { tag:'quality', st:'broken', lv:null, note:'эрозия ценовой власти' },
-  NVO:   { tag:'quality', st:'broken', lv:null, note:'прогноз вниз, Lilly впереди' },
-  LEGN:  { tag:'lotto',   st:'broken', lv:null, note:'J&J двигает конкурента' },
+  // Тезис повреждён — не покупать ни при какой цене.
+  // st:'broken' — ⛔ в статусе; reviewBy/check — журнал пересмотра:
+  // дата прошла, решения нет — строка подсвечивается «просрочен пересмотр»
+  PSN:   { tag:'quality', st:'broken', lv:null, note:'гайденс срезан дважды',
+           reviewBy:'2026-08-27', check:'стабилизация заказов, гайденс на год подтверждён' },
+  ZTS:   { tag:'quality', st:'broken', lv:null, note:'эрозия ценовой власти',
+           reviewBy:'2026-08-06', check:'стабилизация US-сегмента и удержание доли' },
+  NVO:   { tag:'quality', st:'broken', lv:null, note:'прогноз вниз, Lilly впереди',
+           reviewBy:'2026-09-10', check:'динамика доли против Lilly, устранение проблем производства' },
+  LEGN:  { tag:'lotto',   st:'broken', lv:null, note:'J&J двигает конкурента',
+           reviewBy:'2026-08-12', check:'Carvykti ≥40% г/г, приоритеты J&J' },
 
   // Биотех-лотереи: цель достигнута — фикс части
   CMPS:  { tag:'lotto', st:'fix', lv:null, note:'фикс половины на силе' },
@@ -56,7 +61,8 @@ const META = {
   MRKR:  { tag:'lotto', st:'fix', lv:null, note:'риск разводнения' },
 
   // Прочее
-  GDDY:  { tag:'quality', lv:null, note:'решить: держать или чистить' },
+  GDDY:  { tag:'quality', lv:null, note:'решить: держать или чистить',
+           reviewBy:'2026-09-01', check:'ROIC ≥20% и рост FCF — держать, иначе чистить' },
   AYTU:  { tag:'exit', st:'sell', lv:null, note:'продать' },
   VTI:   { tag:'index', lv:null, note:'не доливать — брать ITOT' },
 };

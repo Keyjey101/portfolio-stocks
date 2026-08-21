@@ -2,7 +2,10 @@
 
 const { positions, posSource, WATCH, CASH, RULES } = require('./portfolio');
 const { chart, sma, spark, pool } = require('./yahoo');
-const { rulesCheck } = require('./rules');
+const { rulesCheck, overdueDays } = require('./rules');
+
+// '2026-08-06' → '06.08'
+const fmtRu = d => typeof d === 'string' ? d.slice(8, 10) + '.' + d.slice(5, 7) : '';
 
 // ── Сигналы ──
 function vixSignal(v) {
@@ -46,18 +49,28 @@ function firesOf(sV, sT, sY) {
 // ── Статус позиции: смысл действия, а не один красный значок ──
 // st в META: 'sell' (продать) | 'broken' (тезис повреждён) | 'fix' (фикс части)
 // Приоритет: sell → broken → fix → ★DCA → ⏸(until, B2) → ✓Tn → ждать → ⚪
-function statusOf(px, m = {}) {
-  if (m.st === 'sell')   return { s:'🔴 ПРОДАТЬ', c:'r' };
-  if (m.st === 'broken') return { s:'⛔ ТЕЗИС ПОВРЕЖДЁН', c:'r' };
-  if (m.st === 'fix')    return { s:'🔵 ФИКС ЧАСТИ', c:'b' };
+function statusOf(px, m = {}, now = new Date()) {
+  const od = m.reviewBy ? overdueDays(m.reviewBy, now) > 0 : false;
+  const tipBits = [];
+  if (m.check) tipBits.push(m.check);
+  if (m.reviewBy) tipBits.push('пересмотр до ' + fmtRu(m.reviewBy));
+  const tip = tipBits.join(' · ');
+  if (m.st === 'sell')   return { s:'🔴 ПРОДАТЬ', c:'r', tip };
+  // ⛔ + od: дата пересмотра прошла, а решения нет
+  if (m.st === 'broken') return { s:'⛔ ТЕЗИС ПОВРЕЖДЁН', c:'r', od, tip };
+  if (m.st === 'fix')    return { s:'🔵 ФИКС ЧАСТИ', c:'b', tip };
   const lv = m.lv;
-  if (!lv) return { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
+  if (!lv) {
+    // открытый вопрос (держать/чистить) с датой решения — ⏸, не серое «не добирать»
+    if (m.reviewBy) return { s:`⏸ ПЕРЕСМОТР до ${fmtRu(m.reviewBy)}`, c:'y', od, tip };
+    return { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
+  }
   const [t1, t2, t3] = lv;
   if (t1 === 999) return { s:'★ ЕЖЕМЕСЯЧНО', c:'g' };
   // достигнутый уровень (1|2|3) — до вывода зелёного
   const tier = t3 && px <= t3 ? 3 : t2 && px <= t2 ? 2 : t1 && px <= t1 ? 1 : 0;
-  // уровень достигнут, но покупка привязана к событию, а не к цене — ⏸
-  if (tier && m.until) return { s:`⏸ T${tier} ✓ — ждёт ${m.until.event}`, c:'y', tip: m.until.check };
+  // ⏸ уровень достигнут, но событие не снято
+  if (tier && m.until) return { s:`⏸ T${tier} ✓ — ждёт ${m.until.event}`, c:'y', tip: [m.until.check, tip].filter(Boolean).join(' · ') };
   if (tier === 3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
   if (tier === 2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
   if (tier === 1) return { s:`✓ T1 ≤${t1}`, c:'g' };

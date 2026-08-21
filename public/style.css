@@ -274,6 +274,10 @@ tbody tr:last-child td{border-bottom:none}
 @keyframes flashD{0%{background:rgba(196,61,51,.16)}100%{background:transparent}}
 .flash-up td:first-child{animation:flashU 1.4s ease-out}
 .flash-dn td:first-child{animation:flashD 1.4s ease-out}
+/* просрочен пересмотр повреждённого тезиса */
+tr.odrv td{background:rgba(169,123,16,.07)}
+tr.odrv:hover td{background:rgba(169,123,16,.12)}
+tr.odrv .pill{box-shadow:0 0 0 2px rgba(169,123,16,.16)}
 tr.hide,section.hide{display:none}
 #noRes{display:none;text-align:center;color:var(--ink3);padding:50px 0;font:13px var(--mono)}
 #noRes.show{display:block;animation:rise .4s var(--ease) both}

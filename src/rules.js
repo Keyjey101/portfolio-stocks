@@ -1,7 +1,16 @@
 // Правила портфеля: AI-потолок, кэш, макс. имя, повреждённые тезисы.
 // Чистая функция над строками книги — считается машиной, а не глазами по донату.
 
-function rulesCheck(rows, total, cash, rules) {
+// сколько дней назад наступила дата пересмотра (0 — ещё не пора / не задана)
+function overdueDays(reviewBy, now = new Date()) {
+  if (!reviewBy || typeof reviewBy !== 'string') return 0;
+  const t = Date.parse(reviewBy + 'T00:00:00');
+  if (Number.isNaN(t)) return 0;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((today - t) / 864e5));
+}
+
+function rulesCheck(rows, total, cash, rules, now = new Date()) {
   const ok = rows.filter(r => r.ok);
   const sumBy = pred => ok.filter(pred).reduce((s, r) => s + r.val, 0);
 
@@ -18,8 +27,11 @@ function rulesCheck(rows, total, cash, rules) {
   // 3. Макс. имя против потолка
   const maxRow = ok.reduce((a, r) => (r.val > (a ? a.val : -1) ? r : a), null);
 
-  // 4. Повреждённые тезисы
+  // 4. Повреждённые тезисы (+ кто просрочил пересмотр)
   const brokenVal = sumBy(r => r.st === 'broken');
+  const brokenOverdue = ok
+    .filter(r => r.st === 'broken' && overdueDays(r.reviewBy, now) > 0)
+    .map(r => r.t);
 
   return {
     ai: {
@@ -38,10 +50,10 @@ function rulesCheck(rows, total, cash, rules) {
       c: maxRow && total > 0 && maxRow.val / total > rules.maxNamePct + 1e-9 ? 'r' : 'g',
     },
     broken: {
-      pct: total > 0 ? brokenVal / total : 0, val: brokenVal,
+      pct: total > 0 ? brokenVal / total : 0, val: brokenVal, overdue: brokenOverdue,
       c: brokenVal > 0 ? 'o' : 'g',
     },
   };
 }
 
-module.exports = { rulesCheck };
+module.exports = { rulesCheck, overdueDays };

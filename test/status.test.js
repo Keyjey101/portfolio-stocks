@@ -46,7 +46,7 @@ test('уровни не достигнуты — ждать ближайший',
 });
 
 test('⚪ без уровней и без флагов — механическое «не добирать», серый, не красный', () => {
-  for (const t of ['VTI', 'NVDA', 'INTU', 'META', 'TDG', 'GDDY']) {
+  for (const t of ['VTI', 'NVDA', 'INTU', 'META', 'TDG']) {
     const s = statusOf(100, META[t]);
     assert.strictEqual(s.c, 'd', t + ' должен быть серым');
     assert.ok(/НЕ ДОБИРАТЬ/.test(s.s), t + ': ' + s.s);

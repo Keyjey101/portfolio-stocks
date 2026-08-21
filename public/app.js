@@ -345,7 +345,7 @@ function renderDonut(D){
 
 function rowHtml(r,tc,i){
   var d=i==null?'':(' style="animation-delay:'+Math.min(i*25,400)+'ms"');
-  return '<tr data-t="'+r.t+'" data-q="'+esc((r.t+' '+(r.note||'')).toLowerCase())+'"'+d+'>'
+  return '<tr data-t="'+r.t+'" data-q="'+esc((r.t+' '+(r.note||'')).toLowerCase())+'"'+(r.lvl&&r.lvl.od?' class="odrv"':'')+d+'>'
     +'<td class="tk"><span class="dotc" style="--tc:'+tc+'"></span>'+r.t+'</td>'
     +'<td class="num" data-k="px" data-v="'+(r.px==null?'':r.px)+'">'+n(r.px)+'</td>'
     +'<td class="num '+cls(r.day)+'" data-k="day" data-v="'+(r.day==null?'-9999':r.day)+'">'+sign(r.day)+'</td>'
