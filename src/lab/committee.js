@@ -135,6 +135,7 @@ async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLo
   const ctx = await contextLoader();
   const rows = [];
   for (const role of ROLES) {
+    if (rows.length) await new Promise(r => setTimeout(r, 3000)); // бережём rate-limit
     const v = await llm.chat(
       [{ role: 'system', content: 'Ты участник инвестиционного комитета. Отвечай только JSON.' },
        { role: 'user', content: rolePrompt(role.id, ctx) }],
