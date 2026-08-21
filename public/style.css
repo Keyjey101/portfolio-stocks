@@ -368,6 +368,14 @@ svg .xh{stroke:var(--acc2);stroke-width:1;stroke-opacity:.6}
 .lab-back{font:600 12px var(--mono);color:var(--acc);text-decoration:none;border:1px solid var(--line2);padding:8px 14px;border-radius:var(--r-k);white-space:nowrap}
 .lab-back:hover{border-color:rgba(143,106,30,.5)}
 .lab-warn{margin-top:10px;color:var(--o);font:600 12px var(--mono);line-height:1.6}
+.mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 34px}
+.mc-row{display:flex;justify-content:space-between;gap:14px;padding:4px 0;border-bottom:1px dashed rgba(26,28,30,.07);font:12.5px var(--mono);font-variant-numeric:tabular-nums}
+.mc-row:last-child{border-bottom:none}
+.mc-row span{color:var(--ink3)}
+.mc-row b{color:var(--ink);font-weight:600}
+.mc-states{margin-top:12px}
+.mc-fan svg text{font-variant-numeric:tabular-nums}
+@media (max-width:820px){.mc-grid{grid-template-columns:1fr}}
 
 /* ═══ Адаптив ═══ */
 @media (max-width:900px){
