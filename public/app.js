@@ -318,7 +318,7 @@ function rowHtml(r,tc,i){
     +'<td class="num '+cls(r.day)+'" data-k="day" data-v="'+(r.day==null?'-9999':r.day)+'">'+sign(r.day)+'</td>'
     +'<td class="num '+cls(r.pnl)+'" data-k="pnl" data-v="'+(r.pnl==null?'-9999':r.pnl)+'">'+sign(r.pnl)+'</td>'
     +'<td class="num" data-k="val" data-v="'+r.val+'">'+money(r.val)+'</td>'
-    +'<td><span class="pill '+r.lvl.c+'">'+esc(r.lvl.s)+'</span></td>'
+    +'<td><span class="pill '+r.lvl.c+'" title="'+esc(r.lvl.tip||'')+'">'+esc(r.lvl.s)+'</span></td>'
     +'<td class="spk">'+sparkSvg(r.sp,90,22,r.t)+'</td>'
     +'<td class="nt" title="'+esc(r.note||'')+'">'+esc(r.note||'')+'</td>'
     +'</tr>';

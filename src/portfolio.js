@@ -36,7 +36,8 @@ const META = {
   ACIW:  { tag:'quality', lv:[null,null,null], note:'' },
   SIEGY: { tag:'quality', lv:[null,null,null], note:'' },
   ALSN:  { tag:'quality', lv:[null,null,null], note:'' },
-  IRMD:  { tag:'quality', lv:[95,84,74],       note:'2-й транш после Q3' },
+  IRMD:  { tag:'quality', lv:[95,84,74], note:'2-й транш после Q3',
+           until:{ event:'Q3 отчёт', check:'маржа >76%, выпуск 300+ единиц 3870' } },
   GILD:  { tag:'quality', lv:[128,115,102],    note:'DCA, защита' },
   BMY:   { tag:'quality', lv:[null,null,null], note:'' },
 

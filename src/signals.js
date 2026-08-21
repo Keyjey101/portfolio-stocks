@@ -53,9 +53,13 @@ function statusOf(px, m = {}) {
   if (!lv) return { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
   const [t1, t2, t3] = lv;
   if (t1 === 999) return { s:'★ ЕЖЕМЕСЯЧНО', c:'g' };
-  if (t3 && px <= t3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
-  if (t2 && px <= t2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
-  if (t1 && px <= t1) return { s:`✓ T1 ≤${t1}`, c:'g' };
+  // достигнутый уровень (1|2|3) — до вывода зелёного
+  const tier = t3 && px <= t3 ? 3 : t2 && px <= t2 ? 2 : t1 && px <= t1 ? 1 : 0;
+  // уровень достигнут, но покупка привязана к событию, а не к цене — ⏸
+  if (tier && m.until) return { s:`⏸ T${tier} ✓ — ждёт ${m.until.event}`, c:'y', tip: m.until.check };
+  if (tier === 3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
+  if (tier === 2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
+  if (tier === 1) return { s:`✓ T1 ≤${t1}`, c:'g' };
   const next = t1 || t2 || t3;
   return next ? { s:`ждать ${next} (${((next/px-1)*100).toFixed(0)}%)`, c:'d' } : { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
 }
