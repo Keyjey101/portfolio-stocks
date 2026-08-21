@@ -82,7 +82,8 @@ function parseCapex(j) {
 
 const CAPEX_CONCEPTS = [
   'PaymentsToAcquirePropertyPlantAndEquipment',
-  'PaymentsToAcquireProductiveAssets', // Amazon и часть старых филлингов
+  'PaymentsToAcquireProductiveAssets',      // часть старых филлингов
+  'PaymentsForProceedsFromProductiveAssets', // Amazon: покупки нетто (за вычетом продаж)
 ];
 
 async function fetchCapex({ fetchImpl = fetch } = {}) {
@@ -94,13 +95,13 @@ async function fetchCapex({ fetchImpl = fetch } = {}) {
       try {
         const url = `https://data.sec.gov/api/xbrl/companyconcept/CIK${h.cik}/us-gaap/${concept}.json`;
         const r = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(30000) });
-        if (!r.ok) { lastErr = 'HTTP ' + r.status; continue; }
+        if (!r.ok) { lastErr = 'HTTP ' + r.status; await new Promise(res => setTimeout(res, 1200)); continue; }
         p = parseCapex(await r.json());
         if (p) break;
       } catch (e) { lastErr = e.message; }
     }
     out.push(p ? { t: h.t, ttm: p.ttm, growth: +p.ttmGrowth.toFixed(1) } : { t: h.t, error: lastErr });
-    await new Promise(res => setTimeout(res, 500)); // бережём EDGAR
+    await new Promise(res => setTimeout(res, 1500)); // EDGAR троттлит частые запросы
   }
   const ok = out.filter(x => x.growth != null);
   return { companies: out, avgGrowth: ok.length ? ok.reduce((s, x) => s + x.growth, 0) / ok.length : null };
