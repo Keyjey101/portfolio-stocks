@@ -351,10 +351,11 @@ function renderGroups(D){
 
 function renderWatch(D){
   $('#watchBody').innerHTML=D.watch.filter(function(w){return w.ok}).map(function(w,i){
-    return '<tr data-q="'+esc((w.t+' '+w.note).toLowerCase())+'" style="animation-delay:'+Math.min(i*40,200)+'ms">'
+    return '<tr data-t="'+w.t+'" data-q="'+esc((w.t+' '+w.note).toLowerCase())+'" style="animation-delay:'+Math.min(i*40,200)+'ms">'
       +'<td class="tk"><span class="dotc" style="--tc:#8f6a1e"></span>'+w.t+'</td>'
       +'<td class="num" data-k="px" data-v="'+(w.px==null?'':w.px)+'">'+n(w.px)+'</td>'
       +'<td class="num '+cls(w.day)+'" data-k="day" data-v="'+(w.day==null?'-9999':w.day)+'">'+sign(w.day)+'</td>'
+      +'<td><span class="pill '+w.lvl.c+'">'+esc(w.lvl.s)+'</span></td>'
       +'<td class="spk">'+sparkSvg(w.sp,90,22,w.t)+'</td>'
       +'<td class="nt">'+esc(w.note)+'</td></tr>';
   }).join('');

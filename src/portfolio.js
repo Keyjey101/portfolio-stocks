@@ -71,7 +71,7 @@ async function positions() {
 
 const WATCH = [
   { t:'INCY', note:'качество+рост, обрыв Jakafi 2028' },
-  { t:'ISRG', note:'не-AI диверсификатор, зона $430–470' },
+  { t:'ISRG', note:'не-AI диверсификатор, зона $430–470', lv:[470,450,430] },
   { t:'AMAT', note:'32x fwd, циклик' },
   { t:'MKSI', note:'21x fwd, $1,4 млрд конвертов' },
 ];

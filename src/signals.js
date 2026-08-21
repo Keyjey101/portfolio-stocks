@@ -53,6 +53,21 @@ function levelStatus(px, lv) {
   return next ? { s:`ждать ${next} (${((next/px-1)*100).toFixed(0)}%)`, c:'d' } : { s:'—', c:'d' };
 }
 
+// ── Статус вотчлиста: уровни кандидата ──
+// В отличие от позиций, пробой зоны СНИЗУ — не «покупай ещё дешевле»,
+// а повод перепроверить тезис: зону ставили по другому состоянию бумаги
+function watchStatus(px, lv) {
+  if (!lv || px == null) return { s:'—', c:'d' };
+  const [t1, t2, t3] = lv;
+  const lowest = t3 || t2 || t1;
+  if (lowest && px < lowest) return { s:'⏷ ниже зоны — пересмотреть', c:'y' };
+  if (t3 && px <= t3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
+  if (t2 && px <= t2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
+  if (t1 && px <= t1) return { s:`✓ T1 ≤${t1}`, c:'g' };
+  const next = t1 || t2 || t3;
+  return next ? { s:`ждать ${next} (${((next/px-1)*100).toFixed(0)}%)`, c:'d' } : { s:'—', c:'d' };
+}
+
 // ── Сборка данных ──
 async function build() {
   const [vix, spx, tnx] = await Promise.all([
@@ -120,8 +135,9 @@ async function build() {
   const watch = await pool(WATCH, async w => {
     try {
       const d = await chart(w.t, '3mo');
-      return { ...w, px: d.price, day: d.prevClose ? (d.price / d.prevClose - 1) * 100 : null, ok:true, sp: spark(d.closes) };
-    } catch { return { ...w, ok:false }; }
+      const px = d.price;
+      return { ...w, px, day: d.prevClose ? (px / d.prevClose - 1) * 100 : null, lvl: watchStatus(px, w.lv), ok:true, sp: spark(d.closes) };
+    } catch { return { ...w, lvl: watchStatus(null, w.lv), ok:false }; }
   });
 
   const total = rows.filter(r => r.ok).reduce((s, r) => s + r.val, 0);
@@ -150,4 +166,4 @@ function getData() {
   return cache.promise;
 }
 
-module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf };
+module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus };
