@@ -122,3 +122,107 @@ function render(D){
         +'<td class="num '+(c.jump>0.2?'dn':(c.jump<-0.2?'up':''))+'">'+n2(c.jump)+'</td></tr>';
     }).join('')+'</tbody>'+warn;
 }
+
+/* ============== C3: детектор, фальсификации, комитет ============== */
+var VERDICT_TXT={beta_move:['β-движение','d'],idiosyncratic_temporary:['идио-шум','y'],thesis_damage:['ТЕЗИС ПОВРЕЖДЁН','r']};
+function renderDetector(D){
+  var sub=$('#detSub');
+  if(!D.verdicts||!D.verdicts.length){sub.textContent='аномалий |r| > 2.5σ нет'+(D.cached?' · кэш':'');$('#detCard').innerHTML='<div class="cs mut">Просмотрено '+D.flagsChecked+' позиций — факторные остатки в норме.</div>';return}
+  sub.textContent=D.verdicts.length+' аномалий · cooldown 7 дн';
+  $('#detCard').innerHTML=D.verdicts.map(function(v){
+    var vt=VERDICT_TXT[v.verdict]||['?','d'];
+    var news=(v.news||[]).slice(0,3).map(function(n){return '<a href="'+esc(n.link||'#')+'" target="_blank" rel="noopener">'+esc(n.title)+'</a>'}).join('<br>');
+    var fil=(v.filings||[]).slice(0,3).map(function(f){return '<a href="'+esc(f.url)+'" target="_blank" rel="noopener">'+f.form+' · '+esc(f.date)+'</a>'}).join('<br>');
+    return '<div class="det-card">'
+      +'<div class="det-h"><b>'+v.t+'</b>'
+      +'<span class="pill '+vt[1]+'">'+vt[0]+'</span>'
+      +'<span class="det-sig">'+n2(v.lastSigma)+'σ / '+n2(v.cumSigma)+'σ (5д)</span></div>'
+      +'<div class="det-reason">'+esc(v.reason)+'</div>'
+      +(v.pillar&&v.pillar!=='—'?'<div class="det-pillar">опора: '+esc(v.pillar)+'</div>':'')
+      +'<div class="det-conf mut">уверенность '+((v.confidence==null)?'—':(v.confidence*100).toFixed(0)+'%')+(v.cooledDown?' · cooldown':'')+'</div>'
+      +(news?'<div class="det-src">новости: '+news+'</div>':'')
+      +(fil?'<div class="det-src">SEC: '+fil+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+
+function renderFalsify(D){
+  var items=D.items||[];
+  $('#falSub').textContent=items.length+' записей';
+  var rows=items.map(function(r){
+    var last=r.checks&&r.checks.length?r.checks[r.checks.length-1]:null;
+    var st=r.status==='triggered'?'<span class="pill r">ТРИГГЕР '+new Date(r.triggeredAt).toLocaleDateString('ru-RU')+'</span>'
+      :r.status==='retired'?'<span class="pill d">снят</span>':'<span class="pill g">активна</span>';
+    var conds=r.conditions.map(function(c,i){
+      var vd=last?(last.verdicts||[]).find(function(x){return x.i===i}):null;
+      return '<li>'+esc(c.text)+(vd?' — '+(vd.triggered?'<b class="dn">сработало</b>':esc(vd.evidence)):'')+'</li>';
+    }).join('');
+    return '<div class="fal-card"><div class="det-h"><b>'+r.t+'</b>'+st
+      +(last?'<span class="det-sig mut">чек '+new Date(last.date).toLocaleDateString('ru-RU')+'</span>':'<span class="det-sig mut">ещё не проверялась</span>')
+      +'</div><div class="det-reason">тезис: '+esc(r.thesis)+'</div><ol class="fal-conds">'+conds+'</ol>'
+      +'<button class="lab-btn" data-fal-check="'+r.t+'">Проверить</button></div>';
+  }).join('');
+  $('#falCard').innerHTML=(rows||'<div class="cs mut">Реестр пуст — сгенерируй фальсификации для позиции.</div>')
+    +'<div class="fal-new"><input id="falTicker" placeholder="ТИКЕР (напр. TSM)" maxlength="8">'
+    +'<button class="lab-btn" id="falGen">Сгенерировать 3 условия</button></div>';
+  var genBtn=$('#falGen');
+  if(genBtn)genBtn.addEventListener('click',function(){
+    genBtn.disabled=true;genBtn.textContent='Генерируем…';
+    post('/api/lab/falsify',{action:'generate',t:($('#falTicker').value||'').trim().toUpperCase()})
+      .then(function(){location.reload()}).catch(function(e){alert(e.message);genBtn.disabled=false;genBtn.textContent='Сгенерировать 3 условия'});
+  });
+  $$('#falCard [data-fal-check]').forEach(function(b){
+    b.addEventListener('click',function(){
+      b.disabled=true;b.textContent='Проверяем…';
+      post('/api/lab/falsify',{action:'check',t:b.dataset.falCheck})
+        .then(function(){location.reload()}).catch(function(e){alert(e.message);b.disabled=false;b.textContent='Проверить'});
+    });
+  });
+}
+
+function post(url,body){return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(j){if(!j.ok)throw new Error(j.error||'ошибка');return j})}
+
+var ROLENAME={bull:'Бык',bear:'Медведь',devil:'Адвокат дьявола',baserates:'Базовые ставки'};
+function evTxt(e){
+  if(!e)return '—';
+  var h=e.horizon_days+' дн';
+  if(String(e.kind).indexOf('price_')===0)return e.t+' '+(e.kind==='price_above'?'+':'−')+(e.x*100).toFixed(0)+'% за '+h;
+  if(String(e.kind).indexOf('index_')===0)return 'S&P '+(e.kind==='index_above'?'+':'−')+(e.x*100).toFixed(0)+'% за '+h;
+  return 'VIX '+(e.kind==='vix_above'?'≥':'≤')+e.level+' за '+h;
+}
+function renderCommittee(D){
+  var w=D.weights||{},b=D.brier||{};
+  $('#comSub').textContent=D.predictions?D.predictions.length+' последних прогнозов':'';
+  var roleRow=D.roles.map(function(r){
+    var br=b[r.id],wt=w[r.id];
+    return '<div class="mc-row"><span>'+esc(r.name)+(wt!=null?' · вес '+(wt*100).toFixed(0)+'%':'')+'</span>'
+      +'<b>'+(br==null?'нет оценённых':'Brier '+br.toFixed(3))+'</b></div>';
+  }).join('');
+  var cal=(D.calibration||[]).filter(function(x){return x.n>0}).map(function(x){
+    return '<div class="mc-row"><span>заявлено '+(x.claimed*100).toFixed(0)+'%</span><b>факт '+(x.hitRate*100).toFixed(0)+'% · n='+x.n+'</b></div>';
+  }).join('');
+  var preds=(D.predictions||[]).slice(0,15).map(function(p){
+    return '<div class="mc-row"><span>'+esc(ROLENAME[p.role]||p.role)+' · '+esc(evTxt(p.event))+'</span>'
+      +'<b>'+(p.prob*100).toFixed(0)+'%'
+      +(p.outcome==null?' <i class="mut">ждёт</i>':(p.outcome?' <i class="up">✓</i>':' <i class="dn">✗</i>'))+'</b></div>';
+  }).join('');
+  $('#comCard').innerHTML='<div class="mc-grid"><div><div class="ph">Калибровка ролей (Brier ↓)</div>'+roleRow
+    +'<div class="ph" style="margin-top:12px">Бакеты вероятностей</div>'+(cal||'<div class="cs mut">пока нет созревших</div>')
+    +'<div style="margin-top:14px"><button class="lab-btn" id="comRun">Созвать комитет</button> '
+    +'<button class="lab-btn" id="comScore">Оценить созревшие</button></div></div>'
+    +'<div><div class="ph">Последние прогнозы</div>'+(preds||'<div class="cs mut">Комитет ещё не созывался.</div>')+'</div></div>';
+  var run=$('#comRun');
+  if(run)run.addEventListener('click',function(){
+    run.disabled=true;run.textContent='Комитет думает…';
+    post('/api/lab/committee',{action:'run'}).then(function(){location.reload()}).catch(function(e){alert(e.message);run.disabled=false;run.textContent='Созвать комитет'});
+  });
+  var sc=$('#comScore');
+  if(sc)sc.addEventListener('click',function(){
+    sc.disabled=true;sc.textContent='Оцениваем…';
+    post('/api/lab/committee',{action:'score'}).then(function(){location.reload()}).catch(function(e){alert(e.message);sc.disabled=false;sc.textContent='Оценить созревшие'});
+  });
+}
+
+fetch('/api/lab/detector').then(function(r){return r.json()}).then(renderDetector).catch(function(e){$('#detSub').textContent='ошибка: '+e.message});
+fetch('/api/lab/falsify').then(function(r){return r.json()}).then(renderFalsify).catch(function(e){$('#falSub').textContent='ошибка: '+e.message});
+fetch('/api/lab/committee').then(function(r){return r.json()}).then(renderCommittee).catch(function(e){$('#comSub').textContent='ошибка: '+e.message});

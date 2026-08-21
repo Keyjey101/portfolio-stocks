@@ -10,6 +10,8 @@ const { runFactors } = require('./lab/factors');
 const { runLevels } = require('./lab/levels');
 const { runMC } = require('./lab/mc');
 const { runDetector } = require('./lab/detector');
+const falsify = require('./lab/falsify');
+const committee = require('./lab/committee');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -23,6 +25,19 @@ const MIME = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
 };
+
+// чтение JSON-тела POST (маленького — до 8 КБ)
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let buf = '';
+    req.on('data', c => {
+      buf += c;
+      if (buf.length > 8192) { reject(new Error('тело слишком большое')); req.destroy(); }
+    });
+    req.on('end', () => { try { resolve(buf ? JSON.parse(buf) : {}); } catch (e) { reject(e); } });
+    req.on('error', reject);
+  });
+}
 
 function start() {
   http.createServer(async (req, res) => {
@@ -93,6 +108,53 @@ function start() {
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/falsify') {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (req.method === 'POST') {
+          const body = await readBody(req);
+          const rec = body.action === 'check'
+            ? await falsify.check(body.t)
+            : await falsify.generate(body.t);
+          res.end(JSON.stringify({ ok: true, rec }));
+        } else {
+          res.end(JSON.stringify({ ok: true, items: falsify.getRegistry() }));
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/committee') {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (req.method === 'POST') {
+          const body = await readBody(req);
+          const out = body.action === 'score'
+            ? { scored: await committee.scoreMatured() }
+            : await committee.runCommittee();
+          res.end(JSON.stringify({ ok: true, ...out }));
+        } else {
+          const brier = committee.brierByRole();
+          res.end(JSON.stringify({
+            ok: true,
+            roles: committee.ROLES,
+            brier,
+            weights: committee.consensusWeights(),
+            calibration: committee.calibration(),
+            predictions: require('fs').readFileSync(path.join(__dirname, '..', 'data', 'predictions.jsonl'), 'utf8')
+              .split('\n').filter(Boolean).map(l => JSON.parse(l)).slice(-60).reverse(),
+          }));
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
     }
