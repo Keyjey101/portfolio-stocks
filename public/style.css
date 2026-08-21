@@ -251,6 +251,7 @@ tbody tr:last-child td{border-bottom:none}
 .up{color:var(--g)}.dn{color:var(--r)}.mut{color:var(--ink3)}
 .pill{display:inline-block;font:600 10.5px var(--mono);padding:3px 10px;letter-spacing:.03em;border-radius:999px}
 .pill.g{color:#0a6b49;background:rgba(14,138,95,.10);border:1px solid rgba(14,138,95,.30)}
+.pill.b{color:#1f5f8a;background:rgba(88,127,168,.10);border:1px solid rgba(88,127,168,.30)}
 .pill.y{color:#7c5a0c;background:rgba(169,123,16,.10);border:1px solid rgba(169,123,16,.30)}
 .pill.o{color:#8f4815;background:rgba(192,98,28,.09);border:1px solid rgba(192,98,28,.30)}
 .pill.r{color:#93291f;background:rgba(196,61,51,.09);border:1px solid rgba(196,61,51,.30)}

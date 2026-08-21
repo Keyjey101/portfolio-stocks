@@ -40,22 +40,23 @@ const META = {
   GILD:  { tag:'quality', lv:[128,115,102],    note:'DCA, защита' },
   BMY:   { tag:'quality', lv:[null,null,null], note:'' },
 
-  // Тезис повреждён — НЕ ДОБИРАТЬ
-  PSN:   { tag:'quality', lv:null, note:'⛔ гайд срезан дважды' },
-  ZTS:   { tag:'quality', lv:null, note:'⛔ эрозия ценовой власти' },
-  NVO:   { tag:'quality', lv:null, note:'⛔ прогноз вниз, Lilly впереди' },
-  LEGN:  { tag:'lotto',   lv:null, note:'⛔ J&J двигает конкурента' },
+  // Тезис повреждён — не покупать ни при какой цене
+  // st:'broken' — ⛔ в статусе; note хранит причину
+  PSN:   { tag:'quality', st:'broken', lv:null, note:'гайденс срезан дважды' },
+  ZTS:   { tag:'quality', st:'broken', lv:null, note:'эрозия ценовой власти' },
+  NVO:   { tag:'quality', st:'broken', lv:null, note:'прогноз вниз, Lilly впереди' },
+  LEGN:  { tag:'lotto',   st:'broken', lv:null, note:'J&J двигает конкурента' },
 
-  // Биотех-лотереи
-  CMPS:  { tag:'lotto', lv:null, note:'фикс половины на силе' },
-  GHRS:  { tag:'lotto', lv:null, note:'фикс половины' },
-  ATAI:  { tag:'lotto', lv:null, note:'фикс половины' },
-  DFTX:  { tag:'lotto', lv:null, note:'фикс 1/2–2/3' },
-  MRKR:  { tag:'lotto', lv:null, note:'риск разводнения' },
+  // Биотех-лотереи: цель достигнута — фикс части
+  CMPS:  { tag:'lotto', st:'fix', lv:null, note:'фикс половины на силе' },
+  GHRS:  { tag:'lotto', st:'fix', lv:null, note:'фикс половины' },
+  ATAI:  { tag:'lotto', st:'fix', lv:null, note:'фикс половины' },
+  DFTX:  { tag:'lotto', st:'fix', lv:null, note:'фикс 1/2–2/3' },
+  MRKR:  { tag:'lotto', st:'fix', lv:null, note:'риск разводнения' },
 
   // Прочее
   GDDY:  { tag:'quality', lv:null, note:'решить: держать или чистить' },
-  AYTU:  { tag:'exit', lv:null, note:'продать' },
+  AYTU:  { tag:'exit', st:'sell', lv:null, note:'продать' },
   VTI:   { tag:'index', lv:null, note:'не доливать — брать ITOT' },
 };
 

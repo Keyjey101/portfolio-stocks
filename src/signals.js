@@ -42,15 +42,22 @@ function firesOf(sV, sT, sY) {
   ];
 }
 
-function levelStatus(px, lv) {
-  if (!lv) return { s:'⛔ НЕ ДОБИРАТЬ', c:'r' };
+// ── Статус позиции: смысл действия, а не один красный значок ──
+// st в META: 'sell' (продать) | 'broken' (тезис повреждён) | 'fix' (фикс части)
+// Приоритет: sell → broken → fix → ★DCA → ⏸(until, B2) → ✓Tn → ждать → ⚪
+function statusOf(px, m = {}) {
+  if (m.st === 'sell')   return { s:'🔴 ПРОДАТЬ', c:'r' };
+  if (m.st === 'broken') return { s:'⛔ ТЕЗИС ПОВРЕЖДЁН', c:'r' };
+  if (m.st === 'fix')    return { s:'🔵 ФИКС ЧАСТИ', c:'b' };
+  const lv = m.lv;
+  if (!lv) return { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
   const [t1, t2, t3] = lv;
   if (t1 === 999) return { s:'★ ЕЖЕМЕСЯЧНО', c:'g' };
   if (t3 && px <= t3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
   if (t2 && px <= t2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
   if (t1 && px <= t1) return { s:`✓ T1 ≤${t1}`, c:'g' };
   const next = t1 || t2 || t3;
-  return next ? { s:`ждать ${next} (${((next/px-1)*100).toFixed(0)}%)`, c:'d' } : { s:'—', c:'d' };
+  return next ? { s:`ждать ${next} (${((next/px-1)*100).toFixed(0)}%)`, c:'d' } : { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
 }
 
 // ── Статус вотчлиста: уровни кандидата ──
@@ -128,7 +135,7 @@ async function build() {
       const val = px * p.qty;
       const pnl = p.avg > 0 ? (px / p.avg - 1) * 100 : null;
       const day = d.prevClose ? (px / d.prevClose - 1) * 100 : null;
-      return { ...p, px, val, pnl, day, lvl: levelStatus(px, p.lv), ok: true, sp: spark(d.closes) };
+      return { ...p, px, val, pnl, day, lvl: statusOf(px, p), ok: true, sp: spark(d.closes) };
     } catch (e) {
       return { ...p, ok: false, err: e.message };
     }
@@ -168,4 +175,4 @@ function getData() {
   return cache.promise;
 }
 
-module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus };
+module.exports = { getData, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf };
