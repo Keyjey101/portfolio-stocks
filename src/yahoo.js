@@ -10,13 +10,20 @@ async function chart(symbol, range = '1y') {
   const res = j?.chart?.result?.[0];
   if (!res) throw new Error(`${symbol}: нет данных`);
   const q = res.indicators.quote[0];
-  const closes = (q.close || []).filter(v => v != null);
+  const raw = q.close || [];
+  const stamps = res.timestamp || [];
+  const closes = [], ts = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] == null) continue;
+    closes.push(raw[i]);
+    ts.push(stamps[i] ?? null);
+  }
   return {
     price: res.meta.regularMarketPrice ?? closes.at(-1),
     // вчерашнее закрытие: chartPreviousClose при range=3mo — это закрытие
     // ПЕРЕД диапазоном (3 месяца назад), поэтому берём предпоследнюю точку
     prevClose: closes.length >= 2 ? closes.at(-2) : null,
-    closes,
+    closes, ts,
     hi52: res.meta.fiftyTwoWeekHigh,
     lo52: res.meta.fiftyTwoWeekLow,
   };

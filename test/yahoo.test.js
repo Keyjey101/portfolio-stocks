@@ -45,3 +45,22 @@ test('prevClose = null, если в ряду меньше двух точек', 
   const d = await chart('X');
   assert.strictEqual(d.prevClose, null, 'одна точка — вчерашнего закрытия нет');
 });
+
+test('ts: даты фильтруются вместе с closes', async (t) => {
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      chart: { result: [{
+        meta: { regularMarketPrice: 12 },
+        timestamp: [100, 200, 300, 400],
+        indicators: { quote: [{ close: [10, null, 11, 12] }] },
+      }] },
+    }),
+  });
+  const { chart } = require('../src/yahoo');
+  const d = await chart('X');
+  assert.deepEqual(d.closes, [10, 11, 12]);
+  assert.deepEqual(d.ts, [100, 300, 400]);
+});
