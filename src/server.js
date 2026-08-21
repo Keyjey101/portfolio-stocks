@@ -13,6 +13,7 @@ const { runDetector } = require('./lab/detector');
 const falsify = require('./lab/falsify');
 const committee = require('./lab/committee');
 const journal = require('./lab/journal');
+const baserates = require('./lab/baserates');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -204,6 +205,26 @@ function start() {
         const D = readCache('counterfactuals', 6 * 3600e3) || { items: [], advice: null };
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ ok: true, ...D }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/baserates') {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          const out = await baserates.query(String(b.q || '').slice(0, 500));
+          res.end(JSON.stringify({ ok: true, result: out }));
+        } else if (req.url.includes('backfill=1')) {
+          const out = await baserates.backfill({}); // вся вселенная, одноразово
+          res.end(JSON.stringify({ ok: true, backfill: out }));
+        } else {
+          res.end(JSON.stringify({ ok: true, data: baserates.getAggregates() }));
+        }
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));

@@ -251,3 +251,51 @@ function renderCF(D){
   $('#cfTable').innerHTML='<thead><tr><th>Тикер</th><th>Тип</th><th class="num">Факт</th><th class="num">Альтернатива</th><th class="num">Преимущество</th><th>Альтернатива — что это</th></tr></thead><tbody>'+rows+advRow+'</tbody>';
 }
 fetch('/api/lab/counterfactuals').then(function(r){return r.json()}).then(renderCF).catch(function(e){$('#cfSub').textContent='ошибка: '+e.message});
+
+/* ============== базовые ставки (#7) ============== */
+var BR_CLASS={drawdown40:'просадка ≥40% от 52-нед максимума',shock15:'шок-день ≤ −15%'};
+function renderBR(D){
+  var d=D.data;
+  if(!d){$('#brSub').textContent='нет данных — нужен бэкфилл';$('#brCard').innerHTML='<div class="cs mut">Нажми «Бэкфилл вселенной»: загрузит 10 лет истории S&P 500 (~500 тикеров, несколько минут).</div><div style="margin-top:12px"><button class="lab-btn" id="brBackfill">Бэкфилл вселенной</button></div>';hookBR();return}
+  $('#brSub').textContent='S&P 500 · '+d.loaded+'/'+d.universe+' тикеров · '+new Date(d.generatedAt).toLocaleDateString('ru-RU');
+  var rows=Object.keys(BR_CLASS).map(function(cls){
+    var a=d.agg[cls]; if(!a)return '';
+    return '<div class="mc-row"><span>'+BR_CLASS[cls]+' · n='+a.n+'</span>'
+      +'<b>1м '+n2(a.medianFwd[0])+'% · 3м '+n2(a.medianFwd[1])+'% · 6м '+n2(a.medianFwd[2])+'% · 12м '+n2(a.medianFwd[3])+'%'
+      +(a.recoveredShare!=null?' · восст '+(a.recoveredShare*100).toFixed(0)+'%':'')+'</b></div>';
+  }).join('');
+  $('#brCard').innerHTML='<div class="lab-warn">Эмпирика по сегодняшним живым участникам индекса — survivorship bias: исключённые из индекса компании не видны, реальные исходы хуже показанных.</div>'
+    +rows
+    +'<div class="ph" style="margin-top:14px">Запрос: что обычно происходит после…</div>'
+    +'<div class="fal-new"><input id="brQ" placeholder="напр.: срез гайденса дважды + инсайдеры покупают" style="width:340px">'
+    +'<button class="lab-btn" id="brAsk">Спросить</button></div>'
+    +'<div id="brAns" style="margin-top:10px"></div>';
+  hookBR();
+}
+function hookBR(){
+  var bf=$('#brBackfill');
+  if(bf)bf.addEventListener('click',function(){
+    bf.disabled=true;bf.textContent='Бэкфилл идёт (минуты)…';
+    fetch('/api/lab/baserates?backfill=1').then(function(r){return r.json()}).then(function(j){
+      if(!j.ok)throw new Error(j.error);
+      location.reload();
+    }).catch(function(e){alert(e.message);bf.disabled=false;bf.textContent='Бэкфилл вселенной'});
+  });
+  var ask=$('#brAsk');
+  if(ask)ask.addEventListener('click',function(){
+    var q=($('#brQ').value||'').trim(); if(!q)return;
+    ask.disabled=true;ask.textContent='…';
+    fetch('/api/lab/baserates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q})})
+      .then(function(r){return r.json()}).then(function(j){
+        if(!j.ok)throw new Error(j.error);
+        var res=j.result, emp=res.empirical, pr=res.llmPrior;
+        $('#brAns').innerHTML='<div class="det-card">'
+          +'<div class="det-h"><b>класс: '+esc(res.classification)+'</b></div>'
+          +(emp?'<div class="det-reason">Эмпирика (S&P 500, '+emp.n+' событий): медиана 12м <b>'+n2(emp.medianFwd[3])+'%</b> (квартили '+n2(emp.q1Fwd[3])+'…'+n2(emp.q3Fwd[3])+'%), восстановились за год '+(emp.recoveredShare!=null?(emp.recoveredShare*100).toFixed(0)+'%':'—')+' · <i>survivorship-biased</i></div>':'<div class="det-reason mut">Для этого класса эмпирики нет — только мнение модели.</div>')
+          +'<div class="det-reason">Приор модели (МНЕНИЕ, не данные): '+esc(pr.note)+' · медиана 12м ~'+n2(pr.median12m)+'%</div>'
+          +'</div>';
+        ask.disabled=false;ask.textContent='Спросить';
+      }).catch(function(e){alert(e.message);ask.disabled=false;ask.textContent='Спросить'});
+  });
+}
+fetch('/api/lab/baserates').then(function(r){return r.json()}).then(renderBR).catch(function(e){$('#brSub').textContent='ошибка: '+e.message});
