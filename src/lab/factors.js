@@ -123,19 +123,25 @@ async function loadPrices(tickers, range = '1y') {
   return out;
 }
 
-// пересечение дат всех рядов → выровненные числовые ряды
+// пересечение КАЛЕНДАРНЫХ дней всех рядов → выровненные числовые ряды.
+// (метки Yahoo у индексов плывут внутри дня: ^GSPC 13:30 UTC, ^VIX 07:00 —
+// точное совпадение секунд между индексом и акцией почти всегда пусто)
 function alignPrices(raw) {
   const keys = Object.keys(raw);
   if (!keys.length) return {};
   let common = null;
   for (const k of keys) {
-    const set = new Set(raw[k].ts.filter(Boolean));
+    const set = new Set(raw[k].ts.filter(Boolean).map(t => Math.floor(t / 86400)));
     common = common ? new Set([...common].filter(d => set.has(d))) : set;
   }
   const sorted = [...common].sort((a, b) => a - b);
   const out = {};
   for (const k of keys) {
-    const m = new Map(raw[k].ts.map((d, i) => [d, raw[k].closes[i]]));
+    const m = new Map();
+    for (let i = 0; i < raw[k].ts.length; i++) {
+      if (raw[k].ts[i] == null || raw[k].closes[i] == null) continue;
+      m.set(Math.floor(raw[k].ts[i] / 86400), raw[k].closes[i]);
+    }
     out[k] = sorted.map(d => m.get(d));
   }
   return out;

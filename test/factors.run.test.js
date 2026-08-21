@@ -3,9 +3,35 @@ const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { runFactors } = require('../src/lab/factors');
+const { runFactors, alignPrices } = require('../src/lab/factors');
 
 const DIR = path.join(__dirname, '..', 'data', 'cache');
+
+test('alignPrices: индексы с разным временем суток внутри дня выравниваются по календарному дню', () => {
+  // регрессия: ^GSPC приходит 13:30 UTC, ^VIX — 07:00, ^TNX — 13:00;
+  // точное пересечение секунд пусто — выравниваем по floor(ts/86400)
+  const raw = {
+    A: { closes: [10, 11, 12], ts: [1724247000, 1724333400, 1724419800] }, // 13:30
+    B: { closes: [20, 21, 22], ts: [1724223600, 1724310000, 1724396400] }, // 07:00
+    C: { closes: [30, 31, 32], ts: [1724242800, 1724329200, 1724415600] }, // 13:00
+  };
+  const out = alignPrices(raw);
+  assert.strictEqual(Object.keys(out).length, 3);
+  for (const k of Object.keys(out)) {
+    assert.strictEqual(out[k].length, 3, k + ' выровнен на 3 общих дня');
+  }
+  assert.deepEqual(out.A, [10, 11, 12]);
+  assert.deepEqual(out.B, [20, 21, 22]);
+  // день, отсутствующий у одного ряда, исключается у всех
+  const raw2 = {
+    A: { closes: [10, 11, 12], ts: [100, 200, 300].map(d => d * 86400) },
+    B: { closes: [20, 21], ts: [100, 300].map(d => d * 86400) },
+  };
+  const out2 = alignPrices(raw2);
+  assert.deepEqual(out2.A, [10, 12]);
+  assert.deepEqual(out2.B, [20, 21]);
+});
+
 
 function lcg(seed) {
   let s = seed >>> 0 || 1;
