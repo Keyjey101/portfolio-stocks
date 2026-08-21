@@ -1,0 +1,14 @@
+{
+  "name": "portfolio-terminal",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Портфельный терминал: сигналы входа, уровни докупа, правила портфеля",
+  "main": "dashboard.js",
+  "scripts": {
+    "start": "node dashboard.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18.14"
+  }
+}

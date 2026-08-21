@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e6e7e3">
+<title>Портфель · серебряный терминал</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23f4f4f2'/%3E%3Cpath d='M3 11l3-4 2.5 2.5L13 4' stroke='%238f6a1e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head><body>
+
+<div class="amb" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div id="boot">
+  <div class="boot-card bez"><div class="core">
+    <div class="boot-top">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+        <rect x="1" y="1" width="46" height="46" rx="4" fill="none" stroke="rgba(26,28,30,.16)" stroke-width="2"/>
+        <path class="lp" d="M9 33 L18 21 L25 27 L39 11" fill="none" stroke="#8f6a1e" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle class="ld" cx="39" cy="11" r="3.2" fill="#0e8a5f"/>
+      </svg>
+      <div class="boot-name">ПОРТФЕЛЬ·ТЕРМИНАЛ<small>v4 · серебряная серия</small></div>
+    </div>
+    <div class="boot-tube"><div id="bootFill"></div><div class="glint"></div></div>
+    <div class="boot-status" id="bootStatus">Подключение к рынку…</div>
+    <div class="boot-steps" id="bootSteps"></div>
+    <div class="boot-err" id="bootErr"></div>
+    <button class="boot-retry" id="bootRetry">Повторить</button>
+  </div></div>
+</div>
+
+<header class="top"><div class="island">
+  <div class="mark">
+    <span class="mtile">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M4.5 19 L10.5 11 L14.5 14.5 L21 6" fill="none" stroke="#8f6a1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
+    <h1>Портфель<b>·</b>терминал</h1>
+  </div>
+  <span class="stamp" id="stamp">загрузка…</span>
+  <span class="spacer"></span>
+  <div class="search"><input id="q" type="text" placeholder="тикер или заметка" aria-label="Поиск по портфелю"></div>
+  <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="rbg" cx="12" cy="12" r="9"/><circle id="ringFg" cx="12" cy="12" r="9"/></svg>
+  <button class="iconbtn" id="btnRefresh" title="Обновить (R)" aria-label="Обновить"><span class="ic">↻</span></button>
+</div></header>
+
+<div class="tape" aria-label="Тикер позиций"><div class="tape-in">
+  <div class="tape-cap"><i></i>Лента</div>
+  <div class="tape-view"><div id="tapeTrack"></div></div>
+</div></div>
+
+<main class="wrap">
+
+  <section class="mast" id="mast">
+    <div class="mast-l">
+      <div class="eyebrow"><i class="led" id="moodLed"></i>Личный терминал · данные Yahoo Finance</div>
+      <div class="hero-num" id="heroVal">$0</div>
+      <div class="hero-chips" id="heroChips"></div>
+      <div class="hero-sub" id="heroSub"></div>
+    </div>
+    <aside class="vbox bez spot reveal" id="verdictBox" style="--d:120ms"><div class="core" id="verdict"></div></aside>
+  </section>
+
+  <section class="sig reveal" id="vbreakSec" style="--d:200ms">
+    <div id="vbreak"></div>
+    <details class="vhelp">
+      <summary>На чём основан вердикт и что значит «половинный транш»?</summary>
+      <div class="vbody">
+        Вердикт = сколько из <b>3 сигналов</b> сработало прямо сейчас (чипы выше: значение → условие → полоска близости к порогу). Оттенок зарева на фоне и LED повторяют вердикт — настроение рынка видно с одного взгляда.<br>
+        <span class="ok">■ 2–3 из 3 — «ОКНО ОТКРЫТО»</span>: рынок напуган, разрешено разворачивать резерв — покупать полными траншами на слабости.<br>
+        <span class="warn">■ 1 из 3 — «ЧАСТИЧНОЕ ОКНО, половинный транш»</span>: сигнал один, подтверждения нет. Войти можно, но <b>половиной обычной суммы</b> резерва на сделку — если сигнал исчезнет, потери от преждевременного входа вдвое меньше.<br>
+        <span class="bad">■ 0 из 3 — «ОКНА НЕТ»</span>: резерв не трогаем, только базовый ежемесячный DCA (ITOT).<br>
+        <b>Почему вердикт «мигает» между обновлениями:</b> пороги жёсткие (VIX 22 · −15% от пика / 200MA · −25 б.п. по 10Y). Когда показатель ходит вплотную к порогу, он то срабатывает, то нет — смотри метку «≈ на границе» на чипе. Это нормально: решение принимает не одно обновление, а устойчивое состояние.
+      </div>
+    </details>
+  </section>
+
+  <div class="grid" id="cards"></div>
+
+  <div class="duo">
+    <div class="bez spot reveal" id="spxChart" style="--d:300ms"><div class="core"></div></div>
+    <div class="bez spot reveal" id="donutPanel" style="--d:380ms"><div class="core"></div></div>
+  </div>
+
+  <div id="groups"></div>
+
+  <section class="grp reveal" id="watchSec" style="--d:120ms">
+    <div class="gh" style="--tc:#8f6a1e"><h3>Вотчлист</h3></div>
+    <div class="tw bez spot"><div class="core"><table>
+      <thead><tr><th data-k="t">Тикер</th><th data-k="px" class="num sortable">Цена<span class="arr"></span></th>
+      <th data-k="day" class="num sortable">День<span class="arr"></span></th><th>3 мес</th><th>Заметка</th></tr></thead>
+      <tbody id="watchBody"></tbody>
+    </table></div></div>
+  </section>
+
+  <div id="noRes">Ничего не найдено — попробуй другой запрос</div>
+
+  <div class="foot reveal" style="--d:200ms">
+    <b>Правило:</b> базовый DCA всегда → множитель по VIX и просадке → резерв только при 2 сигналах из 3.<br>
+    <b>Источник позиций:</b> Tradernet API — данные подтягиваются сами при открытии и обновлении.<br>
+    Данные Yahoo Finance с задержкой. Не инвестиционная рекомендация.
+    <div id="failed"></div>
+  </div>
+</main>
+
+<div id="tip" role="tooltip" aria-hidden="true"></div>
+<div id="toasts"></div>
+
+<script src="/app.js"></script>
+</body></html>

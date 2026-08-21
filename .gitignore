@@ -1,0 +1,11 @@
+# секреты и рантайм-кэш
+.env
+data/positions.json
+data/proxy.json
+data/*.xlsx
+
+# инструментальное
+node_modules/
+.kilo/
+__pycache__/
+*.pyc
