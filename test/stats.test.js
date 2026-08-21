@@ -1,7 +1,22 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { quantile, ranks, pearson, spearman, entropy } = require('../src/math/stats');
+const { quantile, ranks, pearson, spearman, entropy, normCdf, lcg } = require('../src/math/stats');
+
+test('normCdf: Φ(0)=0.5, Φ(1.96)≈0.975, симметрия, хвост', () => {
+  assert.ok(Math.abs(normCdf(0) - 0.5) < 1e-9);
+  assert.ok(Math.abs(normCdf(1.96) - 0.975) < 1e-4);
+  assert.ok(Math.abs(normCdf(-1.96) - 0.025) < 1e-4);
+  assert.ok(Math.abs(normCdf(1.5) + normCdf(-1.5) - 1) < 1e-9);
+  assert.ok(Math.abs(normCdf(3) - 0.99865) < 1e-5);
+});
+
+test('lcg: детерминирован и в [0,1)', () => {
+  const a = lcg(7), b = lcg(7);
+  const s1 = [a(), a(), a()], s2 = [b(), b(), b()];
+  assert.deepEqual(s1, s2);
+  for (const v of s1) assert.ok(v >= 0 && v < 1);
+});
 
 test('quantile: интерполяция по определению', () => {
   assert.strictEqual(quantile([1, 2, 3, 4], 0.5), 2.5);
