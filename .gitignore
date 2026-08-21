@@ -3,6 +3,10 @@
 data/positions.json
 data/proxy.json
 data/cache/
+data/llm-log.jsonl
+data/recs.jsonl
+data/predictions.jsonl
+data/falsifications.json
 data/*.xlsx
 
 # инструментальное

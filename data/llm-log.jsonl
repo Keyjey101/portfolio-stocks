@@ -1,2 +1,0 @@
-{"ts":"2026-08-21T19:24:08.222Z","task":"detector","t":"BRKN","model":"glm-4-32b-0414-128k","ok":false,"retries":2,"error":"сетевая ошибка: Cannot read properties of null (reading '1')"}
-{"ts":"2026-08-21T19:24:14.399Z","task":"detector","t":"BRKN","model":"glm-4-32b-0414-128k","ok":false,"retries":2,"error":"сетевая ошибка: Cannot read properties of null (reading '1')"}
