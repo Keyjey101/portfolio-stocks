@@ -2,6 +2,7 @@
 .env
 data/positions.json
 data/proxy.json
+data/cache/
 data/*.xlsx
 
 # инструментальное
