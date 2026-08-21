@@ -86,6 +86,7 @@ test('scoreMatured + brierByRole + softmax-консенсус', async () => {
   assert.ok(w.bull > w.bear, 'лучшая калибровка — больший вес');
 
   const cal = C.calibration();
-  assert.ok(Array.isArray(cal) && cal.length > 0);
-  assert.ok(cal.every(b => b.n >= 0 && b.hitRate != null));
+  assert.ok(Array.isArray(cal) && cal.length === 5);
+  assert.ok(cal.every(b => b.n >= 0));
+  assert.ok(cal.filter(b => b.n > 0).every(b => b.hitRate != null), 'непустые бакеты имеют частоту');
 });
