@@ -24,7 +24,7 @@ function mcTouch(S0, target, muAnn, sigAnn, years, seed, paths = 20000) {
   const nu = muAnn - sigAnn * sigAnn / 2;
   const steps = Math.round(years * 252);
   const dt = 1 / 252;
-  const b = Math.log(target / S0) - 0.5826 * sigAnn * Math.sqrt(dt);
+  const b = Math.log(target / S0) + 0.5826 * sigAnn * Math.sqrt(dt);
   let hits = 0;
   for (let p = 0; p < paths; p++) {
     let x = 0, hit = false;
