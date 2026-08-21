@@ -114,10 +114,10 @@ const { readCache, writeCache } = require('../cache');
 
 const DAY = 24 * 3600e3;
 
-async function loadPrices(tickers) {
+async function loadPrices(tickers, range = '1y') {
   const out = {};
   await pool(tickers, async t => {
-    const d = await chart(t, '1y').catch(() => null);
+    const d = await chart(t, range).catch(() => null);
     if (d && Array.isArray(d.closes) && d.closes.length > 120) out[t] = { closes: d.closes, ts: d.ts };
   });
   return out;

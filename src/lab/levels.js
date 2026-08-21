@@ -34,4 +34,39 @@ function calibrateLevels(closes, lv, horizonYr = 1) {
   };
 }
 
-module.exports = { calibrateLevels };
+// ── I/O: заливка 2y, кэш 24 ч ──
+const { loadPrices, alignPrices } = require('./factors');
+const { positions: defaultPositions } = require('../portfolio');
+const { readCache, writeCache } = require('../cache');
+
+let inflight = null;
+
+async function runLevels({ force = false, positionsLoader = defaultPositions, cacheName = 'levels' } = {}) {
+  if (!force) {
+    const cached = readCache(cacheName, DAY);
+    if (cached) return { ...cached, cached: true };
+    if (inflight) return inflight;
+  }
+  inflight = (async () => {
+    const list = (await positionsLoader())
+      .filter(p => Array.isArray(p.lv) && p.lv.some(v => v && v !== 999));
+    const raw = await loadPrices(list.map(p => p.t), '2y');
+    const aligned = alignPrices(raw);
+    const items = [];
+    for (const p of list) {
+      const closes = aligned[p.t];
+      if (!closes || closes.length < 260) continue; // GARCH нужен хотя бы год
+      items.push({
+        t: p.t,
+        until: p.until || null,
+        ...calibrateLevels(closes, p.lv),
+      });
+    }
+    const res = { generatedAt: new Date().toISOString(), items };
+    writeCache(cacheName, res);
+    return { ...res, cached: false };
+  })();
+  try { return await inflight; } finally { inflight = null; }
+}
+
+module.exports = { calibrateLevels, runLevels };

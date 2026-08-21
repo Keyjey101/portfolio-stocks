@@ -7,6 +7,7 @@ const path = require('path');
 
 const { getData, getCalendar } = require('./signals');
 const { runFactors } = require('./lab/factors');
+const { runLevels } = require('./lab/levels');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -41,6 +42,20 @@ function start() {
       try {
         const force = req.url.includes('force=1');
         const D = await runFactors({ force });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(D));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/levels') {
+      // калибровка уровней #5: GARCH + P(касания), кэш 24 ч
+      try {
+        const force = req.url.includes('force=1');
+        const D = await runLevels({ force });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(D));
       } catch (e) {
