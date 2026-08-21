@@ -15,7 +15,7 @@ test('watchStatus: цена ниже всей зоны — янтарный «п
 test('watchStatus: цена в зоне — зелёные уровни', () => {
   assert.strictEqual(watchStatus(455, [470, 450, 430]).s, '✓ T1 ≤470');
   assert.strictEqual(watchStatus(445, [470, 450, 430]).s, '✓✓ T2 ≤450');
-  assert.strictEqual(watchStatus(432, [470, 450, 430]).s, '✓✓✓ T3 ≤430');
+  assert.strictEqual(watchStatus(425, [470, 450, 430]).s, '✓✓✓ T3 ≤430');
 });
 
 test('watchStatus: выше зоны — ждать, без уровней — прочерк', () => {
