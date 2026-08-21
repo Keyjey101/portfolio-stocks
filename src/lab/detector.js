@@ -63,4 +63,116 @@ function detectFlags(residuals, { k = 2.5, cum = 5 } = {}) {
   return out;
 }
 
-module.exports = { computeResiduals, detectFlags };
+// ── I/O: заливка, кэш 24 ч, cooldown 7 дн, LLM-атрибуция, recs.jsonl ──
+const fs = require('fs');
+const path = require('path');
+const { loadPrices, alignPrices, FACTOR_PROXIES } = require('./factors');
+const { positions: defaultPositions, META } = require('../portfolio');
+const { readCache, writeCache } = require('../cache');
+const { fetchHeadlines } = require('../news');
+const { edgarRecent } = require('../edgar');
+const defaultLlm = require('../llm');
+
+const DAY = 24 * 3600e3;
+const COOLDOWN = 7 * DAY;
+const ATTR_DIR = path.join(__dirname, '..', '..', 'data', 'cache', 'attribution');
+const RECS_FILE = path.join(__dirname, '..', '..', 'data', 'recs.jsonl');
+
+function appendRec(rec) {
+  try {
+    fs.mkdirSync(path.dirname(RECS_FILE), { recursive: true });
+    fs.appendFileSync(RECS_FILE, JSON.stringify({ ts: new Date().toISOString(), ...rec }) + '\n');
+  } catch { /* лог не должен ломать детектор */ }
+}
+
+const VERDICT_SCHEMA = {
+  verdict: 'enum:beta_move,idiosyncratic_temporary,thesis_damage',
+  reason: 'string',
+  pillar: 'string',
+  confidence: 'number',
+};
+
+async function attribute(t, flag, meta, llm) {
+  const [news, filings] = await Promise.all([
+    fetchHeadlines(t).catch(() => []),
+    edgarRecent(t).catch(() => []),
+  ]);
+  const prompt = [
+    `Тикер: ${t}. Позиция: тег ${meta?.tag || '?'}, заметка: «${meta?.note || '—'}».`,
+    `Факторная модель: аномалия дня ${flag.lastSigma?.toFixed(1) ?? '?'}σ, за 5 дней ${flag.cumSigma?.toFixed(1) ?? '?'}σ (остаток = движение бумаги минус движение, объяснённое факторами рынка/секторов).`,
+    news.length ? 'Заголовки новостей (последние):' : 'Новостей нет.',
+    ...news.slice(0, 10).map(n => `- ${n.title}${n.date ? ' (' + new Date(n.date).toISOString().slice(0, 10) + ')' : ''}`),
+    filings.length ? 'Свежие филлинги SEC:' : 'Филлингов нет.',
+    ...filings.slice(0, 5).map(f => `- ${f.form} от ${f.date}: ${f.url}`),
+    '',
+    'Классифицируй движение одной строкой verdict:',
+    'beta_move — движение объяснимо факторами (сектор/рынок), тезис цел;',
+    'idiosyncratic_temporary — бумажная/idio-аномалия без ущерба бизнесу (разовые продажи, шум, техфактор);',
+    'thesis_damage — событие бьёт по опоре тезиса (гайденс, конкурент, регулятор, спрос).',
+    'reason — одна фраза с конкретной причиной; pillar — какая опора тезиса задета (или «—»); confidence — 0..1.',
+    'Верни ТОЛЬКО JSON: {"verdict":"beta_move|idiosyncratic_temporary|thesis_damage","reason":"…","pillar":"…","confidence":0.0}',
+  ].join('\n');
+
+  const v = await llm.chat(
+    [{ role: 'system', content: 'Ты строгий аналитик фондового рынка. Отвечай только JSON.' },
+     { role: 'user', content: prompt }],
+    { schema: VERDICT_SCHEMA, task: 'detector', t, temperature: 0.2 },
+  );
+  return { ...v, news, filings };
+}
+
+let inflight = null;
+
+async function runDetector({ force = false, positionsLoader = defaultPositions,
+  factors = FACTOR_PROXIES, market = 'SPY', llm = defaultLlm } = {}) {
+  if (!force) {
+    const cached = readCache('detector', DAY);
+    if (cached) return { ...cached, cached: true };
+    if (inflight) return inflight;
+  }
+  inflight = (async () => {
+    const list = (await positionsLoader()).filter(p => p.qty > 0 || p.t === 'ITOT');
+    const universe = [...new Set([...list.map(p => p.t), ...factors, market])];
+    const raw = await loadPrices(universe, '1y');
+    const aligned = alignPrices(raw);
+    const okList = list.filter(p => aligned[p.t] && aligned[p.t].length > 90);
+    const model = okList.map(p => ({ t: p.t, tag: p.tag, val: (p.qty || 0) * aligned[p.t].at(-1) }));
+
+    const { residuals } = computeResiduals({ prices: aligned, positions: model, factors, market });
+    const flags = detectFlags(residuals);
+
+    const verdicts = [];
+    const skipped = [];
+    fs.mkdirSync(ATTR_DIR, { recursive: true });
+    for (const p of okList) {
+      if (!flags[p.t]?.flag) continue;
+      const file = path.join(ATTR_DIR, `${p.t}.json`);
+      let prev = null;
+      try { prev = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+      if (!force && prev && Date.now() - Date.parse(prev.checkedAt) < COOLDOWN) {
+        verdicts.push({ t: p.t, ...flags[p.t], ...prev, cooledDown: true });
+        continue;
+      }
+      try {
+        const v = await attribute(p.t, flags[p.t], META[p.t], llm);
+        const rec = { t: p.t, ...flags[p.t], checkedAt: new Date().toISOString(), ...v };
+        fs.writeFileSync(file, JSON.stringify(rec, null, 2));
+        verdicts.push(rec);
+        if (v.verdict === 'thesis_damage') appendRec({ kind: 'detector', t: p.t, verdict: v.verdict, reason: v.reason });
+      } catch (e) {
+        skipped.push({ t: p.t, error: e.message });
+      }
+    }
+
+    const res = {
+      generatedAt: new Date().toISOString(),
+      flagsChecked: okList.length,
+      verdicts, skipped,
+    };
+    writeCache('detector', res);
+    return { ...res, cached: false };
+  })();
+  try { return await inflight; } finally { inflight = null; }
+}
+
+module.exports = { computeResiduals, detectFlags, runDetector };

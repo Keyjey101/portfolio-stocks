@@ -9,6 +9,7 @@ const { getData, getCalendar } = require('./signals');
 const { runFactors } = require('./lab/factors');
 const { runLevels } = require('./lab/levels');
 const { runMC } = require('./lab/mc');
+const { runDetector } = require('./lab/detector');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -72,6 +73,21 @@ function start() {
       try {
         const force = req.url.includes('force=1');
         const D = await runMC({ force });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(D));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/detector') {
+      // детектор слома тезиса #2: остатки 2.5σ → LLM-атрибуция;
+      // LLM зовётся только по флагам, cooldown 7 дней на тикер
+      try {
+        const force = req.url.includes('force=1');
+        const D = await runDetector({ force });
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify(D));
       } catch (e) {

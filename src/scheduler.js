@@ -11,9 +11,11 @@ function start() {
   const { runFactors } = require('./lab/factors');
   const { runLevels } = require('./lab/levels');
   const { runMC } = require('./lab/mc');
+  const { runDetector } = require('./lab/detector');
   const warmDaily = () => {
     runFactors().catch(e => console.error('scheduler: factors:', e.message));
     runLevels().catch(e => console.error('scheduler: levels:', e.message));
+    runDetector().catch(e => console.error('scheduler: detector:', e.message));
   };
   const warmWeekly = () => runMC().catch(e => console.error('scheduler: mc:', e.message));
   timers.push(setTimeout(warmDaily, 30e3));
