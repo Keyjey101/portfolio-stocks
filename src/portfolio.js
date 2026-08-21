@@ -54,7 +54,7 @@ const META = {
   MRKR:  { tag:'lotto', lv:null, note:'риск разводнения' },
 
   // Прочее
-  GDDY:  { tag:'exit', lv:null, note:'решить: держать или чистить' },
+  GDDY:  { tag:'quality', lv:null, note:'решить: держать или чистить' },
   AYTU:  { tag:'exit', lv:null, note:'продать' },
   VTI:   { tag:'index', lv:null, note:'не доливать — брать ITOT' },
 };
@@ -78,4 +78,4 @@ const WATCH = [
 
 const CASH = 1000;
 
-module.exports = { positions, posSource, WATCH, CASH };
+module.exports = { positions, posSource, META, WATCH, CASH };
