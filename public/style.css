@@ -362,6 +362,13 @@ svg .xh{stroke:var(--acc2);stroke-width:1;stroke-opacity:.6}
 .boot-retry:active{transform:scale(.97)}
 #boot.err .boot-retry,#boot.err .boot-err{display:block}
 
+/* ═══ Лаборатория ═══ */
+.lab-wrap{padding-top:26px}
+.enb-big{font:700 clamp(40px,6vw,64px)/1.1 var(--mono);letter-spacing:-.02em;color:var(--ink);margin:4px 0 8px}
+.lab-back{font:600 12px var(--mono);color:var(--acc);text-decoration:none;border:1px solid var(--line2);padding:8px 14px;border-radius:var(--r-k);white-space:nowrap}
+.lab-back:hover{border-color:rgba(143,106,30,.5)}
+.lab-warn{margin-top:10px;color:var(--o);font:600 12px var(--mono);line-height:1.6}
+
 /* ═══ Адаптив ═══ */
 @media (max-width:900px){
   .mast{grid-template-columns:1fr}

@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { getData, getCalendar } = require('./signals');
+const { runFactors } = require('./lab/factors');
+const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
 const PUB = path.join(__dirname, '..', 'public');
@@ -24,6 +26,29 @@ function start() {
     const url = decodeURIComponent(req.url.split('?')[0]);
 
     if (url === '/favicon.ico') { res.writeHead(204).end(); return; }
+
+    if (url === '/lab') {
+      fs.readFile(path.join(PUB, 'lab.html'), (err, data) => {
+        if (err) { res.writeHead(404).end('not found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(data);
+      });
+      return;
+    }
+
+    if (url === '/api/lab/factors') {
+      // факторная модель #1/#9: кэш 24 ч на сервере, ?force=1 — пересчитать
+      try {
+        const force = req.url.includes('force=1');
+        const D = await runFactors({ force });
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(D));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+      return;
+    }
 
     if (url === '/api/calendar') {
       // календарь отчётов: тяжёлый (quoteSummary на каждый тикер) — грузится
@@ -65,7 +90,8 @@ function start() {
 
     res.writeHead(404).end('not found');
   }).listen(PORT, () => {
-    console.log(`\n  Терминал:  http://localhost:${PORT}\n  Оболочка открывается мгновенно, данные — с анимацией загрузки.\n  Автообновление раз в 90 сек. Ctrl+C для остановки.\n`);
+    scheduler.start();
+    console.log(`\n  Терминал:  http://localhost:${PORT}  ·  лаборатория: http://localhost:${PORT}/lab\n  Оболочка открывается мгновенно, данные — с анимацией загрузки.\n  Автообновление раз в 90 сек. Ctrl+C для остановки.\n`);
   });
 }
 
