@@ -111,6 +111,7 @@
 
   <div class="foot reveal" style="--d:200ms">
     <a href="/lab" style="color:var(--acc)">Лаборатория → факторная модель · ENB · стресс-корреляции</a><br>
+    <button class="lab-btn" id="btnDecision" style="margin:6px 0">Записать решение</button>
     <b>Правило:</b> базовый DCA всегда → множитель по VIX и просадке → резерв только при 2 сигналах из 3.<br>
     <b>Источник позиций:</b> Tradernet API — данные подтягиваются сами при открытии и обновлении.<br>
     Данные Yahoo Finance с задержкой. Не инвестиционная рекомендация.
@@ -120,6 +121,27 @@
 
 <div id="tip" role="tooltip" aria-hidden="true"></div>
 <div id="toasts"></div>
+
+<div id="decModal" class="dec-modal" hidden>
+  <div class="dec-card bez"><div class="core">
+    <div class="ph" id="decTitle">Записать решение</div>
+    <div id="decPendingInfo" class="cs" style="margin-bottom:10px"></div>
+    <div class="dec-grid">
+      <label>Тип<select id="decType">
+        <option value="buy">покупка</option><option value="sell">продажа</option>
+        <option value="skip">решил не покупать</option><option value="ignore_advice">проигнорировал совет</option>
+      </select></label>
+      <label>Тикер<input id="decT" maxlength="8" placeholder="TSM"></label>
+      <label>Кол-во<input id="decQty" type="number" min="0" step="1"></label>
+      <label>Цена<input id="decPx" type="number" min="0" step="0.01"></label>
+    </div>
+    <label class="dec-full">Зачем? (обоснование — увидит контрфактуал через месяц)<textarea id="decWhy" rows="3" maxlength="1000" placeholder="напр.: докупка по T1 после отчёта, маржа подтверждена"></textarea></label>
+    <div class="dec-actions">
+      <button class="lab-btn" id="decSave">Записать</button>
+      <button class="lab-btn" id="decCancel" style="border-color:var(--line2);color:var(--ink2)">Отмена</button>
+    </div>
+  </div></div>
+</div>
 
 <script src="/app.js"></script>
 </body></html>

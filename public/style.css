@@ -392,6 +392,16 @@ svg .xh{stroke:var(--acc2);stroke-width:1;stroke-opacity:.6}
 .lab-btn{cursor:pointer;border:1px solid rgba(143,106,30,.45);background:linear-gradient(180deg,#fff,#f2f2ef);color:var(--acc);border-radius:var(--r-k);padding:8px 16px;font:600 12px var(--mono);letter-spacing:.04em;transition:all .25s var(--ease)}
 .lab-btn:hover:not(:disabled){background:var(--acc);color:#fff}
 .lab-btn:disabled{opacity:.6;cursor:wait}
+.dec-modal{position:fixed;inset:0;z-index:96;display:flex;align-items:center;justify-content:center;background:rgba(230,231,227,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.dec-modal[hidden]{display:none}
+.dec-card{width:min(560px,92vw)}
+.dec-card .core{padding:22px 26px}
+.dec-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:8px 0}
+.dec-grid label,.dec-full{display:flex;flex-direction:column;gap:5px;font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.dec-grid select,.dec-grid input,.dec-full textarea{border:1px solid var(--line2);border-radius:var(--r-k);padding:9px 12px;font:13px var(--mono);background:rgba(255,255,255,.85);color:var(--ink);outline:none;resize:vertical}
+.dec-grid select:focus,.dec-grid input:focus,.dec-full textarea:focus{border-color:rgba(143,106,30,.55)}
+.dec-full{margin-top:6px}
+.dec-actions{display:flex;gap:10px;margin-top:16px}
 @media (max-width:820px){.mc-grid{grid-template-columns:1fr}}
 
 /* ═══ Адаптив ═══ */

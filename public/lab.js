@@ -226,3 +226,28 @@ function renderCommittee(D){
 fetch('/api/lab/detector').then(function(r){return r.json()}).then(renderDetector).catch(function(e){$('#detSub').textContent='ошибка: '+e.message});
 fetch('/api/lab/falsify').then(function(r){return r.json()}).then(renderFalsify).catch(function(e){$('#falSub').textContent='ошибка: '+e.message});
 fetch('/api/lab/committee').then(function(r){return r.json()}).then(renderCommittee).catch(function(e){$('#comSub').textContent='ошибка: '+e.message});
+
+/* ============== журнал: контрфактуалы (#6) ============== */
+function cls2(v){return v==null?'mut':(v>=0?'up':'dn')}
+function renderCF(D){
+  var items=D.items||[], adv=D.advice;
+  $('#cfSub').textContent=items.length+' решений старше 30 дн'+(adv&&adv.n?' · советов оценено: '+adv.n:'');
+  if(!items.length&&!adv){
+    $('#cfTable').innerHTML='<tbody><tr><td class="cs" style="padding:12px 4px;color:var(--ink3)">Решений пока нет. Кнопка «Записать решение» — внизу главного терминала; сделки из Tradernet подхватываются сами.</td></tr></tbody>';
+    return;
+  }
+  var rows=items.map(function(x){
+    return '<tr><td class="tk">'+x.t+'</td><td>'+x.type+'</td>'
+      +'<td class="num '+cls2(x.actualPct)+'">'+n2(x.actualPct)+'%</td>'
+      +'<td class="num '+cls2(x.alternativePct)+'">'+n2(x.alternativePct)+'%</td>'
+      +'<td class="num '+cls2(x.edgePct)+'">'+n2(x.edgePct)+'%</td>'
+      +'<td class="nt">'+esc(x.alternativeLabel||'')+'</td></tr>';
+  }).join('');
+  var advRow=adv&&adv.n
+    ?'<tr><td class="tk">Σ</td><td>советы</td><td class="num mut">—</td><td class="num mut">—</td>'
+     +'<td class="num '+cls2(-adv.meanRet)+'">'+(adv.hits+'/'+adv.n)+'</td>'
+     +'<td class="nt">детектор thesis_damage: средний ход после −'+n2(adv.meanRet)+'%</td></tr>'
+    :'';
+  $('#cfTable').innerHTML='<thead><tr><th>Тикер</th><th>Тип</th><th class="num">Факт</th><th class="num">Альтернатива</th><th class="num">Преимущество</th><th>Альтернатива — что это</th></tr></thead><tbody>'+rows+advRow+'</tbody>';
+}
+fetch('/api/lab/counterfactuals').then(function(r){return r.json()}).then(renderCF).catch(function(e){$('#cfSub').textContent='ошибка: '+e.message});

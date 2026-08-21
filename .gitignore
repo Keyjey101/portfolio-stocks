@@ -7,6 +7,11 @@ data/llm-log.jsonl
 data/recs.jsonl
 data/predictions.jsonl
 data/falsifications.json
+data/decisions.jsonl
+data/trades-pending.json
+data/journal-snapshot.json
+data/baserates/
+data/capcycle/
 data/*.xlsx
 
 # инструментальное

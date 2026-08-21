@@ -42,11 +42,52 @@ function start() {
   };
   const warmQuarterly = () => falsify.checkAll().catch(e => console.error('scheduler: falsify:', e.message));
 
+  // #6 журнал: автодетект сделок (дифф снапшота позиций) каждые 15 мин
+  const snapshotCheck = () => {
+    const fs = require('fs');
+    const path = require('path');
+    const SNAP = path.join(__dirname, '..', 'data', 'journal-snapshot.json');
+    const { getPositions } = require('./tradernet');
+    const journal = require('./lab/journal');
+    getPositions()
+      .then(list => {
+        let prev = null;
+        try { prev = JSON.parse(fs.readFileSync(SNAP, 'utf8')).list; } catch {}
+        if (prev) journal.pendingTrades(journal.detectTrades(prev, list));
+        fs.mkdirSync(path.dirname(SNAP), { recursive: true });
+        fs.writeFileSync(SNAP, JSON.stringify({ ts: new Date().toISOString(), list }));
+      })
+      .catch(() => {});
+  };
+
+  // #6 контрфактуалы + точность советов: еженедельно, кэш 6 ч
+  const weeklyJournal = () => {
+    const { computeCounterfactuals, adviceAccuracy, listDecisions } = require('./lab/journal');
+    const { chart } = require('./yahoo');
+    const { WATCH } = require('./portfolio');
+    const { writeCache } = require('./cache');
+    const priceLoader = async (t, tradingDaysAgo) => {
+      const d = await chart(t, tradingDaysAgo > 200 ? '2y' : '1y').catch(() => null);
+      if (!d || !d.closes.length) return null;
+      const i = d.closes.length - 1 - tradingDaysAgo;
+      return i >= 0 ? d.closes[i] : d.closes[0];
+    };
+    Promise.all([
+      computeCounterfactuals({ decisions: listDecisions(), priceLoader, watch: WATCH.map(w => w.t) }),
+      adviceAccuracy({ priceLoader }),
+    ])
+      .then(([items, advice]) => writeCache('counterfactuals', { items, advice, at: new Date().toISOString() }))
+      .catch(e => console.error('scheduler: counterfactuals:', e.message));
+  };
+
   setTimeout(warmDaily, 30e3);
   every(DAY, warmDaily);
   setTimeout(warmWeekly, 90e3);
   every(WEEK, warmWeekly);
   every(QUARTER, warmQuarterly);
+  setTimeout(snapshotCheck, 60e3);
+  every(15 * 60e3, snapshotCheck);
+  every(WEEK, weeklyJournal);
 }
 
 function stop() {

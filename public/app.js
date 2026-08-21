@@ -597,3 +597,54 @@ window.addEventListener('resize',setHH);
 setHH();
 
 boot();
+
+/* ============== журнал решений (#6) ============== */
+var pendingTrade=null;
+function decOpen(pre){
+  var m=$('#decModal');
+  m.hidden=false;
+  var info=$('#decPendingInfo');
+  if(pre){
+    pendingTrade=pre;
+    $('#decTitle').textContent='Объясни сделку';
+    var d=pre.diffs[0];
+    info.textContent='Обнаружены сделки: '+pre.diffs.map(function(x){return x.t+' '+(x.dQty>0?'+':'')+x.dQty}).join(', ');
+    $('#decT').value=d.t;
+    $('#decType').value=d.dQty>0?'buy':'sell';
+    $('#decQty').value=Math.abs(d.dQty);
+  } else { pendingTrade=null; info.textContent=''; }
+}
+function decClose(){ $('#decModal').hidden=true; }
+function decSave(){
+  var body={
+    type:$('#decType').value,
+    t:($('#decT').value||'').trim().toUpperCase(),
+    qty:+$('#decQty').value||null,
+    price:+$('#decPx').value||null,
+    rationale:$('#decWhy').value||''
+  };
+  var done=function(){ decClose(); toast('Решение записано в журнал','g'); };
+  var fail=function(e){ toast('Ошибка: '+e.message,'r'); };
+  if(pendingTrade){
+    fetch('/api/journal/pending/resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pendingTrade.id,decision:body})})
+      .then(function(r){return r.json()}).then(function(j){ if(!j.ok) throw new Error('pending не найден'); done(); }).catch(fail);
+  } else {
+    fetch('/api/journal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json()}).then(function(j){ if(!j.ok) throw new Error(j.error); done(); }).catch(fail);
+  }
+}
+(function(){
+  var b=$('#btnDecision'); if(b)b.addEventListener('click',function(){decOpen(null)});
+  $('#decSave').addEventListener('click',decSave);
+  $('#decCancel').addEventListener('click',decClose);
+  $('#decModal').addEventListener('click',function(e){if(e.target===this)decClose()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!$('#decModal').hidden)decClose()});
+  // автодетект: спрашиваем раз за сессию, пока не объяснено
+  var asked=false;
+  setInterval(function(){
+    if(asked||!DATA||document.hidden)return;
+    fetch('/api/journal/pending').then(function(r){return r.json()}).then(function(j){
+      if(j.ok&&j.pending&&j.pending.diffs&&j.pending.diffs.length){asked=true;toast('Обнаружена сделка — объяснить? (кнопка «Записать решение»)','o');decOpen(j.pending)}
+    }).catch(function(){});
+  },60000);
+})();

@@ -12,6 +12,7 @@ const { runMC } = require('./lab/mc');
 const { runDetector } = require('./lab/detector');
 const falsify = require('./lab/falsify');
 const committee = require('./lab/committee');
+const journal = require('./lab/journal');
 const scheduler = require('./scheduler');
 
 const PORT = +(process.env.PORT || 3000);
@@ -152,6 +153,57 @@ function start() {
               .split('\n').filter(Boolean).map(l => JSON.parse(l)).slice(-60).reverse(),
           }));
         }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/journal') {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          journal.addDecision(b);
+          res.end(JSON.stringify({ ok: true }));
+        } else {
+          res.end(JSON.stringify({ ok: true, decisions: journal.listDecisions() }));
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/journal/pending') {
+      // обнаруженные, но не объясненные сделки (дифф снапшота Tradernet)
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ ok: true, pending: journal.getPending() }));
+      return;
+    }
+
+    if (url === '/api/journal/pending/resolve') {
+      try {
+        const b = await readBody(req);
+        const ok = journal.resolvePending(b.id, b.decision);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+      return;
+    }
+
+    if (url === '/api/lab/counterfactuals') {
+      // еженедельный расчёт — из кэша планировщика (тяжёлый: цены по всем решениям)
+      try {
+        const { readCache } = require('./cache');
+        const D = readCache('counterfactuals', 6 * 3600e3) || { items: [], advice: null };
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, ...D }));
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
