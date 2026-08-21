@@ -6,7 +6,7 @@
   "main": "dashboard.js",
   "scripts": {
     "start": "node dashboard.js",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18.14"

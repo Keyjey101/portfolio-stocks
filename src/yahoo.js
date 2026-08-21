@@ -13,7 +13,9 @@ async function chart(symbol, range = '1y') {
   const closes = (q.close || []).filter(v => v != null);
   return {
     price: res.meta.regularMarketPrice ?? closes.at(-1),
-    prevClose: res.meta.chartPreviousClose,
+    // вчерашнее закрытие: chartPreviousClose при range=3mo — это закрытие
+    // ПЕРЕД диапазоном (3 месяца назад), поэтому берём предпоследнюю точку
+    prevClose: closes.length >= 2 ? closes.at(-2) : null,
     closes,
     hi52: res.meta.fiftyTwoWeekHigh,
     lo52: res.meta.fiftyTwoWeekLow,
