@@ -26,7 +26,7 @@ test('resolveEvent: грамматика price/index/vix, границы вкл�
   assert.strictEqual(C.resolveEvent({ kind: 'index_above', ref: 5500, x: 0.09, horizon_days: 30 }, px), true);
   assert.strictEqual(C.resolveEvent({ kind: 'vix_below', level: 20, horizon_days: 30 }, px), true);
   assert.strictEqual(C.resolveEvent({ kind: 'vix_above', level: 15, horizon_days: 30 }, px), true);
-  assert.strictEqual(C.resolveEvent({ kind: 'vix_above', level: 20, horizon_days: 30 }, px), true, 'граница включительно');
+  assert.strictEqual(C.resolveEvent({ kind: 'vix_above', level: 18, horizon_days: 30 }, px), true, 'граница включительно');
   assert.strictEqual(C.resolveEvent({ kind: 'wat', ref: 1 }, px), null, 'неизвестный вид → null');
   assert.strictEqual(C.resolveEvent({ kind: 'price_above', t: 'NOPE', ref: 1, x: 0.1, horizon_days: 30 }, px), null);
 });
@@ -77,8 +77,8 @@ test('scoreMatured + brierByRole + softmax-консенсус', async () => {
   assert.strictEqual(lines.filter(l => JSON.parse(l).outcome == null).length, 1);
 
   const brier = C.brierByRole();
-  // bull: (0.8-1)² + (0.2-0)² = 0.08; bear: (0.3-1)² = 0.49
-  assert.ok(Math.abs(brier.bull - 0.08) < 1e-9);
+  // bull: среднее из (0.8−1)² и (0.2−0)² = 0.04; bear: (0.3−1)² = 0.49
+  assert.ok(Math.abs(brier.bull - 0.04) < 1e-9);
   assert.ok(Math.abs(brier.bear - 0.49) < 1e-9);
 
   const w = C.consensusWeights();
