@@ -101,4 +101,17 @@ function garchForecast(fit, horizonDays) {
   };
 }
 
-module.exports = { nelderMead, fitGARCH, garchForecast };
+// ── Вероятность касания нижнего барьера за время T (GBM, принцип отражения) ──
+// X(t) = νt + σW(t), ν = μ − σ²/2, b = ln(target/S0) < 0:
+//   P(min X ≤ b) = Φ((b − νT)/(σ√T)) + e^{2νb/σ²}·Φ((b + νT)/(σ√T))
+function pTouch(S0, target, muAnn, sigAnn, years) {
+  if (target >= S0) return 1;
+  const b = Math.log(target / S0);
+  const nu = muAnn - sigAnn * sigAnn / 2;
+  const sT = sigAnn * Math.sqrt(years);
+  const p = normCdf((b - nu * years) / sT)
+    + Math.exp((2 * nu * b) / (sigAnn * sigAnn)) * normCdf((b + nu * years) / sT);
+  return Math.min(1, Math.max(0, p));
+}
+
+module.exports = { nelderMead, fitGARCH, garchForecast, pTouch };
