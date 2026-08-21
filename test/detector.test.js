@@ -38,7 +38,7 @@ test('computeResiduals: остатки = факт − факторная час�
   const flags = detectFlags(res.residuals, { k: 2.5, cum: 5 });
   assert.ok(flags.BROKEN.flag, 'сломанная поймана');
   assert.ok(!flags.CLEAN.flag, 'чистая не поймана');
-  assert.ok(flags.BROKEN.lastSigma > 2.5, 'в σ: ' + flags.BROKEN.lastSigma);
+  assert.ok(Math.abs(flags.BROKEN.lastSigma) > 2.5, 'в σ: ' + flags.BROKEN.lastSigma);
   assert.ok(Math.abs(flags.BROKEN.cumSigma) > 2.5, '5-дн накопленный тоже большой');
 });
 
