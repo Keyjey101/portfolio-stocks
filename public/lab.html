@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#e6e7e3">
-<title>Лаборатория · факторная модель</title>
+<title>Лаборатория</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23f4f4f2'/%3E%3Cpath d='M3 11l3-4 2.5 2.5L13 4' stroke='%238f6a1e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,61 +14,124 @@
 <header class="top"><div class="island">
   <div class="mark">
     <span class="mtile"><svg viewBox="0 0 26 26" aria-hidden="true"><path d="M4.5 19 L10.5 11 L14.5 14.5 L21 6" fill="none" stroke="#8f6a1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-    <h1>Лаборатория<b>·</b>факторная модель</h1>
+    <h1>Лаборатория</h1>
   </div>
   <span class="spacer"></span>
   <a class="lab-back" href="/">← к терминалу</a>
 </div></header>
 
 <main class="wrap lab-wrap">
-  <section class="grp"><div class="gh"><h3>Эффективное число ставок</h3></div>
-    <div class="bez spot"><div class="core" id="enbCard">Считаем факторную модель…</div></div>
-  </section>
 
-  <section class="grp"><div class="gh"><h3>Факторные экспозиции</h3><span class="pct" id="expSub"></span></div>
-    <div class="tw bez spot"><div class="core"><table id="expTable"></table></div></div>
-  </section>
+  <!-- ═══ что это за страница ═══ -->
+  <section class="lab-hero bez spot"><div class="core">
+    <div class="ph">Что это за страница</div>
+    <p class="hero-p">Здесь живёт тяжёлая аналитика портфеля. <b>Почти всё считается само</b> — по расписанию, без твоего участия. Твоя часть: раз влёт нажать две кнопки и иногда вписать тикер.</p>
+    <div class="hero-steps">
+      <div class="hstep"><i>1</i><span><b>Ничего не настраивай.</b> Каждый день обновляются факторная модель, уровни и детектор аномалий; раз в неделю — Монте-Карло и комитет агентов.</span></div>
+      <div class="hstep"><i>2</i><span><b>Один раз</b> нажми «Бэкфилл вселенной» в секции «Базовые ставки» (внизу) — это загрузит 10 лет истории S&amp;P 500 на несколько минут.</span></div>
+      <div class="hstep"><i>3</i><span><b>По желанию:</b> впиши тикеры позиций в «Реестр фальсификаций» — агент сформулирует, при каких условиях тезис мёртв, и будет проверять их сам.</span></div>
+    </div>
+    <p class="hero-p mut">Цифры ниже — не прогнозы, а распределения и честные расчёты по эмпирике. Не инвестиционная рекомендация.</p>
+  </div></section>
 
-  <section class="grp"><div class="gh"><h3>Корреляции в стрессе</h3><span class="pct" id="stressSub"></span></div>
-    <div class="tw bez spot"><div class="core"><table id="stressTable"></table></div></div>
-  </section>
+  <!-- ═══ навигация ═══ -->
+  <nav class="lab-nav" aria-label="разделы">
+    <a href="#g-portfolio">Портфель</a>
+    <a href="#g-future">Прогноз</a>
+    <a href="#g-agents">Агенты</a>
+    <a href="#g-decisions">Решения и рынок</a>
+  </nav>
 
-  <section class="grp"><div class="gh"><h3>Калибровка уровней</h3><span class="pct" id="levelsSub"></span></div>
-    <div class="tw bez spot"><div class="core"><table id="levelsTable"></table></div></div>
-  </section>
+  <!-- ═══ группа 1: портфель ═══ -->
+  <div class="lgroup" id="g-portfolio">
+    <div class="lg-title">Из чего на самом деле состоит портфель <span class="lg-tag">считается само · ежедневно</span></div>
 
-  <section class="grp"><div class="gh"><h3>Монте-Карло</h3><span class="pct" id="mcSub"></span></div>
-    <div class="bez spot"><div class="core" id="mcCard">Считаем Монте-Карло…</div></div>
-  </section>
+    <section class="grp"><div class="gh">
+      <h3>Сколько у тебя независимых ставок</h3><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">33 позиции — это не 33 ставки. Многие движутся вместе, как одно целое. Здесь — честное число независимых направлений.</p>
+      <div class="bez spot"><div class="core" id="enbCard">Считаем факторную модель…</div></div>
+    </section>
 
-  <section class="grp"><div class="gh"><h3>Детектор слома тезиса</h3><span class="pct" id="detSub"></span></div>
-    <div class="bez spot"><div class="core" id="detCard">Сканируем остатки…</div></div>
-  </section>
+    <section class="grp"><div class="gh">
+      <h3>К чему привязан портфель</h3><span class="pct" id="expSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Бета показывает: если этот сектор сдвинется на 1% — портфель сдвинется на столько-то процентов. Главная строка — «Портфель β».</p>
+      <details class="sec-details"><summary>показать таблицу по секторам</summary>
+        <div class="tw bez spot"><div class="core"><table id="expTable"></table></div></div>
+      </details>
+    </section>
 
-  <section class="grp"><div class="gh"><h3>Реестр фальсификаций</h3><span class="pct" id="falSub"></span></div>
-    <div class="bez spot"><div class="core" id="falCard">Загружаем реестр…</div></div>
-  </section>
+    <section class="grp"><div class="gh">
+      <h3>Что случается с защитой в плохой день</h3><span class="pct" id="stressSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">В дни, когда рынок падает сильнее 2%, «разные» активы часто начинают падать вместе. Здесь видно, чья защита в стрессе перестаёт работать (Δρ — насколько выросла связность с рынком).</p>
+      <div class="tw bez spot"><div class="core"><table id="stressTable"></table></div></div>
+    </section>
 
-  <section class="grp"><div class="gh"><h3>Комитет и калибровка</h3><span class="pct" id="comSub"></span></div>
-    <div class="bez spot"><div class="core" id="comCard">Загружаем комитет…</div></div>
-  </section>
+    <section class="grp"><div class="gh">
+      <h3>Уровни докупа — реалистичны ли они</h3><span class="pct" id="levelsSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Для каждого твоего уровня: вероятность, что цена коснётся его за год. P&lt;5% — уровень-фантазия (ждать бесполезно). Уровни ближе одной годовой волатильности — фактически один уровень.</p>
+      <div class="tw bez spot"><div class="core"><table id="levelsTable"></table></div></div>
+    </section>
+  </div>
 
-  <section class="grp"><div class="gh"><h3>Журнал решений · контрфактуалы</h3><span class="pct" id="cfSub"></span></div>
-    <div class="tw bez spot"><div class="core"><table id="cfTable"></table></div></div>
-  </section>
+  <!-- ═══ группа 2: прогноз ═══ -->
+  <div class="lgroup" id="g-future">
+    <div class="lg-title">Что может случиться за 10 лет <span class="lg-tag">считается само · еженедельно</span></div>
 
-  <section class="grp"><div class="gh"><h3>Базовые ставки</h3><span class="pct" id="brSub"></span></div>
-    <div class="bez spot"><div class="core" id="brCard">Загружаем…</div></div>
-  </section>
+    <section class="grp"><div class="gh">
+      <h3>Монте-Карло: судьба портфеля в 10 000 вариантах</h3><span class="pct" id="mcSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Не «прогноз», а разброс исходов: 10 000 траекторий с твоими довнесениями $250/мес через спокойные и тревожные режимы рынка. Полоса — коридор исходов, линия посередине — медиана.</p>
+      <div class="bez spot"><div class="core" id="mcCard">Считаем Монте-Карло…</div></div>
+    </section>
+  </div>
 
-  <section class="grp"><div class="gh"><h3>Капитальный цикл</h3><span class="pct" id="ccSub"></span></div>
-    <div class="bez spot"><div class="core" id="ccCard">Загружаем…</div></div>
-  </section>
+  <!-- ═══ группа 3: агенты ═══ -->
+  <div class="lgroup" id="g-agents">
+    <div class="lg-title">ИИ-агенты — работают за тобой <span class="lg-tag">расписание «экономно» · бюджет логируется</span></div>
 
-  <div class="foot">Факторы: SMH · XLK · URA · MOO · GLD · XLE · IWM · TLT · UUP · SPY. Окно 60 дней, шаг 5, ридж-регрессия, беты в сырых единицах (% на % фактора).<br>
-  Уровни: GARCH(1,1) σ-прогноз 12 мес, вероятность касания — принцип отражения; дрейф = исторический ×0,5 (прокси).<br>
-  Монте-Карло: HMM-режимы на [VIX, Δ10Y, rSPX], блочный бутстрап 21 дн; довнесения зачисляются в конце месяца, просадка по месячным срезам.<br>
-  Эмпирика Yahoo Finance, не инвестиционная рекомендация.</div>
+    <section class="grp"><div class="gh">
+      <h3>Детектор: рынок или поломка?</h3><span class="pct" id="detSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Когда бумага падает сильнее, чем объясняет её сектор (аномалия &gt;2,5σ), агент читает новости и отчёты и решает: это β-движение (всё нормально), разовый шум или повреждение тезиса. Если пусто — аномалий нет, это хорошо.</p>
+      <div class="bez spot"><div class="core" id="detCard">Сканируем остатки…</div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Реестр фальсификаций</h3><span class="pct" id="falSub"></span><span class="auto-tag manual">руками</span></div>
+      <p class="sec-sub">Тезис жив, пока не опровергнут. <b>Что делать:</b> впиши тикер позиции — агент сформулирует 3 конкретных условия, при которых тезис мёртв. Дальше он сам проверяет их раз в квартал по отчётам. Сработало условие — позицию пора закрывать или пересматривать.</p>
+      <div class="bez spot"><div class="core" id="falCard">Загружаем реестр…</div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Комитет и его точность</h3><span class="pct" id="comSub"></span><span class="auto-tag auto">авто · кнопка</span></div>
+      <p class="sec-sub">Четыре агента (бык, медведь, адвокат дьявола, базовые ставки) дают прогнозы с вероятностями. Когда прогнозы «созревают», каждый получает счёт точности (Brier — меньше значит лучше). Через пару месяцев станет видно, кого слушать. Кнопки ниже — если не хочется ждать недельного расписания.</p>
+      <div class="bez spot"><div class="core" id="comCard">Загружаем комитет…</div></div>
+    </section>
+  </div>
+
+  <!-- ═══ группа 4: решения и рынок ═══ -->
+  <div class="lgroup" id="g-decisions">
+    <div class="lg-title">Твои решения и рыночная обстановка <span class="lg-tag">журнал пополняется сам · разбор еженедельно</span></div>
+
+    <section class="grp"><div class="gh">
+      <h3>Журнал: помогли ли твои решения</h3><span class="pct" id="cfSub"></span><span class="auto-tag semi">сделки — сами</span></div>
+      <p class="sec-sub">Кнопка «Записать решение» — в футере главного терминала; сделки из брокера подхватываются сами (раз в 15 минут спросит «объяснить?»). Через 30 дней после каждого решения здесь появится сравнение: твой выбор против «просто держать» и против равновесного вотчлиста.</p>
+      <div class="tw bez spot"><div class="core"><table id="cfTable"></table></div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Базовые ставки: что бывает после таких событий</h3><span class="pct" id="brSub"></span><span class="auto-tag manual">одна кнопка</span></div>
+      <p class="sec-sub">Ты описываешь ситуацию («срез гайденса дважды + инсайдеры покупают») — система отвечает, что <i>обычно</i> происходило с акциями S&amp;P 500 после похожего. Эмпирика и мнение модели показываются раздельно и помечены.</p>
+      <div class="bez spot"><div class="core" id="brCard">Загружаем…</div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Капитальный цикл AI: где мы</h3><span class="pct" id="ccSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Стадия AI-строительства по рыночным рядам (полупроводники, уран, оборудование против рынка) и фактическому капексу гиперскейлеров из их отчётов SEC. «Kill-switch 2 из 3» — предупреждение, что цикл разворачивается. Если знаешь текущую цену аренды GPU — впиши её, она дополнит картину.</p>
+      <div class="bez spot"><div class="core" id="ccCard">Загружаем…</div></div>
+    </section>
+  </div>
+
+  <div class="foot">Технически: факторы — SMH · XLK · URA · MOO · GLD · XLE · IWM · TLT · UUP · SPY, окно 60 дн, ридж-регрессия. Уровни — GARCH(1,1), вероятность касания барьерной формулой. Монте-Карло — HMM-режимы, блочный бутстрап. Капекс — XBRL-факты SEC EDGAR.<br>
+  Эмпирика Yahoo Finance и SEC EDGAR. Не инвестиционная рекомендация.</div>
 </main>
 
 <script src="/lab.js"></script>
