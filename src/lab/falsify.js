@@ -31,7 +31,8 @@ const CHECK_SCHEMA = { verdicts: 'array' };
 
 // сгенерировать/перегенерировать фальсификации для тикера
 async function generate(t, { llm = defaultLlm } = {}) {
-  const T = String(t).toUpperCase();
+  const T = String(t || '').toUpperCase().trim();
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(T)) throw new Error('введи тикер латиницей, например TSM');
   const meta = META[T] || {};
   const [news, filings] = await Promise.all([
     fetchHeadlines(T).catch(() => []),
@@ -74,7 +75,8 @@ async function generate(t, { llm = defaultLlm } = {}) {
 
 // проверить условия по свежим данным; триггер → статус triggered + таймер
 async function check(t, { llm = defaultLlm } = {}) {
-  const T = String(t).toUpperCase();
+  const T = String(t || '').toUpperCase().trim();
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(T)) throw new Error('некорректный тикер');
   const reg = getRegistry();
   const idx = reg.findIndex(r => r.t === T);
   if (idx < 0) throw new Error(`${T}: нет записи в реестре фальсификаций`);

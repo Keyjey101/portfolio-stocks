@@ -116,19 +116,23 @@ function start() {
     }
 
     if (url === '/api/lab/falsify') {
+      // заголовки отправляются только после успешной работы:
+      // преждевременный writeHead + writeHead(500) в catch = ERR_HTTP_HEADERS_SENT и краш
       try {
+        const out = req.method === 'POST'
+          ? (() => {
+              const p = readBody(req)
+                .then(body => body.action === 'check'
+                  ? falsify.check(body.t)
+                  : falsify.generate(body.t));
+              return p.then(rec => ({ ok: true, rec }));
+            })()
+          : Promise.resolve({ ok: true, items: falsify.getRegistry() });
+        const payload = await out;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        if (req.method === 'POST') {
-          const body = await readBody(req);
-          const rec = body.action === 'check'
-            ? await falsify.check(body.t)
-            : await falsify.generate(body.t);
-          res.end(JSON.stringify({ ok: true, rec }));
-        } else {
-          res.end(JSON.stringify({ ok: true, items: falsify.getRegistry() }));
-        }
+        res.end(JSON.stringify(payload));
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
@@ -136,27 +140,27 @@ function start() {
 
     if (url === '/api/lab/committee') {
       try {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        let payload;
         if (req.method === 'POST') {
           const body = await readBody(req);
-          const out = body.action === 'score'
-            ? { scored: await committee.scoreMatured() }
-            : await committee.runCommittee();
-          res.end(JSON.stringify({ ok: true, ...out }));
+          payload = body.action === 'score'
+            ? { ok: true, scored: await committee.scoreMatured() }
+            : await committee.runCommittee().then(r => ({ ok: true, ...r }));
         } else {
-          const brier = committee.brierByRole();
-          res.end(JSON.stringify({
+          payload = {
             ok: true,
             roles: committee.ROLES,
-            brier,
+            brier: committee.brierByRole(),
             weights: committee.consensusWeights(),
             calibration: committee.calibration(),
             predictions: require('fs').readFileSync(path.join(__dirname, '..', 'data', 'predictions.jsonl'), 'utf8')
               .split('\n').filter(Boolean).map(l => JSON.parse(l)).slice(-60).reverse(),
-          }));
+          };
         }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(payload));
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
@@ -164,16 +168,13 @@ function start() {
 
     if (url === '/api/journal') {
       try {
+        const payload = req.method === 'POST'
+          ? await readBody(req).then(b => { journal.addDecision(b); return { ok: true }; })
+          : { ok: true, decisions: journal.listDecisions() };
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        if (req.method === 'POST') {
-          const b = await readBody(req);
-          journal.addDecision(b);
-          res.end(JSON.stringify({ ok: true }));
-        } else {
-          res.end(JSON.stringify({ ok: true, decisions: journal.listDecisions() }));
-        }
+        res.end(JSON.stringify(payload));
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
@@ -215,19 +216,19 @@ function start() {
 
     if (url === '/api/lab/baserates') {
       try {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        let payload;
         if (req.method === 'POST') {
           const b = await readBody(req);
-          const out = await baserates.query(String(b.q || '').slice(0, 500));
-          res.end(JSON.stringify({ ok: true, result: out }));
+          payload = { ok: true, result: await baserates.query(String(b.q || '').slice(0, 500)) };
         } else if (req.url.includes('backfill=1')) {
-          const out = await baserates.backfill({}); // вся вселенная, одноразово
-          res.end(JSON.stringify({ ok: true, backfill: out }));
+          payload = { ok: true, backfill: await baserates.backfill({}) }; // вся вселенная, одноразово
         } else {
-          res.end(JSON.stringify({ ok: true, data: baserates.getAggregates() }));
+          payload = { ok: true, data: baserates.getAggregates() };
         }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(payload));
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
@@ -235,23 +236,25 @@ function start() {
 
     if (url === '/api/lab/capcycle') {
       try {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        let payload;
         if (req.method === 'POST') {
           const b = await readBody(req);
           if (b.action === 'gpu') {
             capcycle.addGpuRent(b.usd);
-            const D = await capcycle.runCapcycle({ force: true });
-            res.end(JSON.stringify({ ok: true, data: D }));
+            payload = { ok: true, data: await capcycle.runCapcycle({ force: true }) };
           } else {
-            res.writeHead(400).end('unknown action');
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ ok: false, error: 'unknown action' }));
+            return;
           }
         } else {
           const force = req.url.includes('force=1');
-          const D = await capcycle.runCapcycle({ force });
-          res.end(JSON.stringify({ ok: true, data: D }));
+          payload = { ok: true, data: await capcycle.runCapcycle({ force }) };
         }
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(payload));
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: false, error: e.message }));
       }
       return;
@@ -298,6 +301,9 @@ function start() {
     res.writeHead(404).end('not found');
   }).listen(PORT, () => {
     scheduler.start();
+    // предохранитель: один необработанный rejection не должен ронять
+    // локальный терминал (ошибки в роутах возвращают 500, но защита на случай будущих багов)
+    process.on('unhandledRejection', e => console.error('unhandled rejection (сервер жив):', e && e.message));
     console.log(`\n  Терминал:  http://localhost:${PORT}  ·  лаборатория: http://localhost:${PORT}/lab\n  Оболочка открывается мгновенно, данные — с анимацией загрузки.\n  Автообновление раз в 90 сек. Ctrl+C для остановки.\n`);
   });
 }
