@@ -207,6 +207,7 @@ async function probeProxy(urlStr, host = DOMAIN, port = 443, timeoutMs = PROBE_T
 let detectedProxy = null;   // 'http://127.0.0.1:7890' | null
 let lastScanTs = 0;
 let scanning = null;
+let scanningHost = null;
 
 function loadPersistedProxy() {
   try {
@@ -225,18 +226,19 @@ function persistProxy(url) {
   } catch { /* не критично */ }
 }
 
-async function detectProxy() {
+async function detectProxy(host = DOMAIN, port = 443) {
   if (ENV_PROXY) return ENV_PROXY; // явная настройка важнее всего
-  if (detectedProxy) return detectedProxy;
-  if (Date.now() - lastScanTs < RESCAN_AFTER_MS) return null;
-  if (scanning) return scanning;
+  if (host === DOMAIN && detectedProxy) return detectedProxy; // кэш — только для цели по умолчанию
+  if (Date.now() - lastScanTs < RESCAN_AFTER_MS && host === DOMAIN) return null;
+  if (scanning && scanningHost === host) return scanning;
 
   lastScanTs = Date.now();
+  scanningHost = host;
   scanning = (async () => {
-    // 1) сохранённый — проверить живость
+    // 1) сохранённый — проверить живость (для чужого хоста — пробой туннеля до него)
     const saved = loadPersistedProxy();
     if (saved) {
-      try { await probeProxy(saved); detectedProxy = saved; return saved; }
+      try { await probeProxy(saved, host, port); return saved; }
       catch { /* устарел — ищем заново */ }
     }
 
@@ -248,7 +250,7 @@ async function detectProxy() {
     }
     for (const url of candidates) {
       try {
-        await probeProxy(url);
+        await probeProxy(url, host, port);
         detectedProxy = url;
         persistProxy(url);
         console.log(`Tradernet: найден локальный прокси ${url}`);
@@ -256,7 +258,7 @@ async function detectProxy() {
       } catch { /* не прокси — следующий */ }
     }
     return null;
-  })().finally(() => { scanning = null; });
+  })().finally(() => { scanning = null; scanningHost = null; });
 
   return scanning;
 }
@@ -429,4 +431,4 @@ function posSource() {
   return source;
 }
 
-module.exports = { getPositions, posSource, extractPositions, normalize, requestViaProxy, probeProxy };
+module.exports = { getPositions, posSource, extractPositions, normalize, requestViaProxy, probeProxy, detectProxy };

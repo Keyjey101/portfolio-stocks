@@ -56,10 +56,51 @@ function logCall(rec) {
   } catch { /* лог не должен ломать вызов */ }
 }
 
-async function chat(messages, { schema, task = 'chat', t = null, temperature = 0.2, fetchImpl, maxRetries = 2 } = {}) {
+// ── транспорт: прямой fetch; при сетевом сбое — туннель через локальный прокси
+// (тот же механизм, что у Tradernet: ENV TRADERNET_PROXY > кэш > скан портов).
+// HTTP-ошибки API (401/429/…) прокси не лечат — фолбэк только на сетевых ошибках.
+const { detectProxy, requestViaProxy } = require('./tradernet');
+
+async function postJson(url, headers, body, timeoutMs, { fetchImpl = fetch, net } = {}) {
+  const doFetch = fetchImpl;
+  const via = net || { detectProxy, requestViaProxy };
+
+  // 1) напрямую
+  try {
+    const r = await doFetch(url, {
+      method: 'POST',
+      headers,
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: r.ok, status: r.status, text: await r.text(), via: 'direct' };
+  } catch (e) {
+    const directErr = e.cause ? (e.cause.code || e.cause.message) : e.message;
+    if (fetchImpl !== fetch && !net) throw e; // инжектированный тестовый fetch без net-фолбэка
+
+    // 2) через локальный прокси
+    let proxyUrl = null;
+    try {
+      proxyUrl = await via.detectProxy(new URL(url).hostname);
+    } catch { /* прокси не найден */ }
+    if (!proxyUrl) {
+      throw new Error(`нет маршрута до ${new URL(url).hostname} (прямая ошибка: ${directErr}). Включи VPN/прокси — как для брокера`);
+    }
+    try {
+      const res = await via.requestViaProxy(proxyUrl, url, { method: 'POST', headers, body, timeoutMs });
+      return { ok: res.status >= 200 && res.status < 300, status: res.status, text: res.body.toString('utf8'), via: 'proxy' };
+    } catch (pe) {
+      // CONNECT может принимать даже полумёртвый VPN — отличаем «нет прокси» от «данные не идут»
+      throw new Error(
+        `нет маршрута до ${new URL(url).hostname}: напрямую — ${directErr}; прокси ${proxyUrl} найден, но данные не проходят (${pe.message}). ` +
+        'Проверь VPN: подключение/ноду, и что api.z.ai идёт через прокси, а не DIRECT');
+    }
+  }
+}
+
+async function chat(messages, { schema, task = 'chat', t = null, temperature = 0.2, fetchImpl, net, maxRetries = 2 } = {}) {
   const { key, base, model } = conf();
   if (!key) throw new Error('ZAI_API_KEY не задан (.env)');
-  const doFetch = fetchImpl || fetch;
   let attempt = 0, lastErr = '';
   const convo = messages.slice();
 
@@ -67,14 +108,11 @@ async function chat(messages, { schema, task = 'chat', t = null, temperature = 0
     attempt++;
     let content;
     try {
-      const r = await doFetch(`${base}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model, temperature, messages: convo }),
-        signal: AbortSignal.timeout(90000),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      const j = await r.json();
+      const r = await postJson(`${base}/chat/completions`, {
+        'Content-Type': 'application/json', Authorization: `Bearer ${key}`,
+      }, JSON.stringify({ model, temperature, messages: convo }), 90000, { fetchImpl, net });
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${String(r.text).slice(0, 200)}`);
+      const j = JSON.parse(r.text);
       content = j?.choices?.[0]?.message?.content;
       if (!content) throw new Error('пустой ответ модели');
     } catch (e) {

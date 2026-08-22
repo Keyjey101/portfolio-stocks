@@ -8,9 +8,11 @@ const { chat } = require('../src/llm');
 const LOG = path.join(__dirname, '..', 'data', 'llm-log.jsonl');
 
 function resp(content) {
+  const payload = { choices: [{ message: { content } }] };
   return {
     ok: true,
-    json: async () => ({ choices: [{ message: { content } }] }),
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
   };
 }
 
@@ -94,4 +96,47 @@ test('chat: бюджет-лог пишется', async () => {
   const rec = JSON.parse(after.trim().split('\n').pop());
   assert.strictEqual(rec.task, 'test-log');
   assert.strictEqual(rec.ok, true);
+});
+
+test('chat: прямой fetch упал в сеть → фолбэк через прокси-туннель', async () => {
+  // регрессия: api.z.ai недоступен напрямую (IPv6-чёрная дыра/DPI),
+  // запрос должен уйти через локальный прокси как у Tradernet
+  const badFetch = async () => { const e = new Error('fetch failed'); e.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' }; throw e; };
+  const payload = JSON.stringify({ choices: [{ message: { content: '{"verdict":"beta_move","reason":"ок","confidence":0.7}' } }] });
+  const net = {
+    detectProxy: async host => {
+      assert.strictEqual(host, 'api.z.ai', 'проба туннеля до целевого хоста');
+      return 'http://127.0.0.1:7890';
+    },
+    requestViaProxy: async (proxyUrl, url) => {
+      assert.strictEqual(proxyUrl, 'http://127.0.0.1:7890');
+      assert.ok(String(url).includes('/chat/completions'));
+      return { status: 200, body: Buffer.from(payload) };
+    },
+  };
+  const res = await chat([{ role: 'user', content: '?' }], {
+    schema: SCHEMA, task: 'test-proxy', fetchImpl: badFetch, net,
+  });
+  assert.strictEqual(res.verdict, 'beta_move');
+});
+
+test('chat: сети нет и прокси не найден → понятная ошибка про VPN', async () => {
+  const badFetch = async () => { const e = new Error('fetch failed'); e.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' }; throw e; };
+  const net = { detectProxy: async () => null, requestViaProxy: async () => { throw new Error('не должен зваться'); } };
+  await assert.rejects(
+    chat([{ role: 'user', content: '?' }], { schema: SCHEMA, task: 'test-noproxy', fetchImpl: badFetch, net }),
+    /включи VPN\/прокси|нет маршрута/i
+  );
+});
+
+test('chat: прокси найден, но данные не идут → диагноз «полумёртвый VPN»', async () => {
+  const badFetch = async () => { const e = new Error('fetch failed'); e.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' }; throw e; };
+  const net = {
+    detectProxy: async () => 'http://127.0.0.1:2080',
+    requestViaProxy: async () => { throw new Error('пустой ответ'); },
+  };
+  await assert.rejects(
+    chat([{ role: 'user', content: '?' }], { schema: SCHEMA, task: 'test-deadproxy', fetchImpl: badFetch, net }),
+    /данные не проходят|DIRECT/
+  );
 });
