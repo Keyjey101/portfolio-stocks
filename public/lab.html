@@ -5,7 +5,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23f4f4f2'/%3E%3Cpath d='M3 11l3-4 2.5 2.5L13 4' stroke='%238f6a1e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Manrope:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head><body>
 <div class="amb" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
@@ -17,8 +17,14 @@
     <h1>Лаборатория</h1>
   </div>
   <span class="spacer"></span>
-  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">🔑</span></button>
-  <a class="lab-back" href="/">← к терминалу</a>
+  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">
+    <svg class="l" viewBox="0 0 24 24"><circle cx="8" cy="16" r="4"/><path d="M11 13 21 3M17.5 6.5 20 9M14.5 9.5l2 2"/></svg>
+    <svg class="u" viewBox="0 0 24 24"><rect x="5" y="11" width="13" height="9" rx="2"/><path d="M8 11V7.5A4.5 4.5 0 0 1 16.9 6"/></svg>
+  </span></button>
+  <a class="hbtn" href="/" title="К терминалу">
+    <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+    <span class="ht">к терминалу</span>
+  </a>
 </div></header>
 
 <main class="wrap lab-wrap">
@@ -32,7 +38,7 @@
       <div class="hstep"><i>2</i><span><b>Один раз</b> нажми «Бэкфилл вселенной» в секции «Базовые ставки» (внизу) — это загрузит 10 лет истории S&amp;P 500 на несколько минут.</span></div>
       <div class="hstep"><i>3</i><span><b>По желанию:</b> впиши тикеры позиций в «Реестр фальсификаций» — агент сформулирует, при каких условиях тезис мёртв, и будет проверять их сам.</span></div>
     </div>
-    <p class="hero-p mut">Цифры ниже — не прогнозы, а распределения и честные расчёты по эмпирике. Не инвестиционная рекомендация.</p>
+    <p class="hero-p mut">Цифры ниже — не прогнозы, а распределения и расчёты по эмпирике.</p>
   </div></section>
 
   <!-- ═══ навигация ═══ -->
@@ -131,8 +137,7 @@
     </section>
   </div>
 
-  <div class="foot">Технически: факторы — SMH · XLK · URA · MOO · GLD · XLE · IWM · TLT · UUP · SPY, окно 60 дн, ридж-регрессия. Уровни — GARCH(1,1), вероятность касания барьерной формулой. Монте-Карло — HMM-режимы, блочный бутстрап. Капекс — XBRL-факты SEC EDGAR.<br>
-  Эмпирика Yahoo Finance и SEC EDGAR. Не инвестиционная рекомендация.</div>
+  <div class="foot">Технически: факторы — SMH · XLK · URA · MOO · GLD · XLE · IWM · TLT · UUP · SPY, окно 60 дн, ридж-регрессия. Уровни — GARCH(1,1), вероятность касания барьерной формулой. Монте-Карло — HMM-режимы, блочный бутстрап. Капекс — XBRL-факты SEC EDGAR. Данные — Yahoo Finance и SEC EDGAR.</div>
 </main>
 
 <div id="toasts"></div>

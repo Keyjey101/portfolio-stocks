@@ -56,7 +56,7 @@ var bootStages=[
   {p:22,s:'Запрашиваем позиции: Tradernet API…'},
   {p:52,s:'Запрос котировок: 40+ тикеров…'},
   {p:78,s:'Расчёт сигналов и уровней докупа…'},
-  {p:93,s:'Полируем серебро…'}
+  {p:93,s:'Последние штрихи…'}
 ];
 var bootStepsDef=[['Позиции',25],['Котировки',55],['Сигналы',80],['Готово',97]];
 
@@ -85,8 +85,6 @@ function playBoot(){
 }
 
 var FUN_MSGS=[
-  'Протираем приборы замшей…',
-  'Настраиваем блики на серебре…',
   'Считаем чужие деньги…',
   'Разливаем DCA по стаканам…',
   'Просим VIX взять себя в руки…',
@@ -217,7 +215,7 @@ function renderMast(D){
     $('#heroVal').textContent='· · ·';
     $('#heroChips').innerHTML='<span class="hchip"><small>позиций</small><b>'+t.cnt+'</b></span>'
       +'<span class="hchip"><small>режим</small><b>публичный — суммы скрыты</b></span>';
-    $('#heroSub').innerHTML='<b>'+t.cnt+'</b> позиций · кэш '+n(D.cashPct,1)+'% от портфеля · '+(D.posSource==='api'?'позиции — Tradernet API':'позиции — кэш, API недоступен')+' · <b class="guest-hint">🔑 в шапке — вход владельца</b>';
+    $('#heroSub').innerHTML='<b>'+t.cnt+'</b> позиций · кэш '+n(D.cashPct,1)+'% от портфеля · '+(D.posSource==='api'?'позиции — Tradernet API':'позиции — кэш, API недоступен')+' · <b class="guest-hint">ключ в шапке — вход владельца</b>';
   } else {
     animateNum($('#heroVal'),D.total,money);
 
@@ -247,8 +245,11 @@ function renderSig(D){
   $('#vbreakSec').classList.remove('hide');
   $('#vbreak').innerHTML=D.verdict.fires.map(function(f){
     var near=!f.fires&&f.prog>=0.85;
+    var mark=f.fires
+      ?'<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>'
+      :'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg>';
     return '<div class="vchip '+(f.fires?'on':'')+'">'
-      +'<div class="vh"><span class="vii">'+(f.fires?'✓':'○')+'</span>'+esc(f.name)+'</div>'
+      +'<div class="vh"><span class="vii">'+mark+'</span>'+esc(f.name)+'</div>'
       +'<div class="vnow">'+esc(f.now)+'</div>'
       +'<div class="vneed">'+esc(f.need)+'</div>'
       +'<div class="vbar"><i data-w="'+Math.round(f.prog*100)+'"></i></div>'
@@ -293,7 +294,7 @@ function renderRules(D){
 function renderAll(){
   var D=DATA;
   $('#stamp').textContent='обновлено '+new Date(D.generatedAt).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-  if(D.guest&&!renderAll.guestToastShown){renderAll.guestToastShown=true;toast('Публичный режим: суммы скрыты, проценты видны. 🔑 в шапке — вход владельца','d')}
+  if(D.guest&&!renderAll.guestToastShown){renderAll.guestToastShown=true;toast('Публичный режим: суммы скрыты, проценты видны. Вход владельца — ключ в шапке','d')}
 
   setMood(D.verdict.c);
   renderTape(D);
@@ -459,8 +460,9 @@ function attachSort(){
     ths.forEach(function(th){
       th.addEventListener('click',function(){
         var k=th.dataset.k,dir=th.dataset.dir==='asc'?'desc':'asc';
-        ths.forEach(function(o){o.dataset.dir='';o.querySelector('.arr').textContent=''});
+        ths.forEach(function(o){o.dataset.dir='';o.querySelector('.arr').textContent='';o.removeAttribute('aria-sort')});
         th.dataset.dir=dir;th.querySelector('.arr').textContent=dir==='asc'?'▲':'▼';
+        th.setAttribute('aria-sort',dir==='asc'?'ascending':'descending');
         var tb=tbl.querySelector('tbody');
         var rows=Array.prototype.slice.call(tb.querySelectorAll('tr'));
         rows.sort(function(a,b){
@@ -616,13 +618,7 @@ if(window.matchMedia&&matchMedia('(pointer:fine)').matches){
   },{passive:true});
 }
 
-/* ───────────── высота острова для липких thead ───────────── */
-function setHH(){
-  var h=document.querySelector('header.top');
-  if(h)document.documentElement.style.setProperty('--hh',(h.offsetHeight+2)+'px');
-}
-window.addEventListener('resize',setHH);
-setHH();
+/* ───────────── высота острова для липких thead: задаётся в auth.js (общий) ───────────── */
 
 initAuth();
 boot();

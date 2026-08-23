@@ -39,7 +39,7 @@ function renderLevels(D){
       if(it.fantasy)flags.push('<span class="dn">уровень-фантазия (P(T3)&lt;5%)</span>');
       if(it.merge&&it.merge.length)flags.push('<span class="oc">склеить: '+it.merge.map(function(p){return p[0]+'≈'+p[1]}).join(', ')+'</span>');
       if(it.waitCost!=null&&Math.abs(it.waitCost)>1)flags.push('<span class="mut">E[издержки ожидания] '+money(it.waitCost)+'/год на позицию (прокси)</span>');
-      if(it.until)flags.push('<span class="mut">⏸ '+esc(it.until.event)+'</span>');
+      if(it.until)flags.push('<span class="mut">ждёт: '+esc(it.until.event)+'</span>');
       return '<tr'+(it.fantasy?' class="odrv"':'')+'><td class="tk">'+it.t+'</td>'
         +'<td class="num">'+n2(it.px)+'</td><td class="num">'+(it.sigAnn*100).toFixed(0)+'%</td>'
         +cells+'<td class="nt">'+flags.join('<br>')+'</td></tr>';
@@ -48,7 +48,7 @@ function renderLevels(D){
 function GARCH_SUB(D){return 'P — вероятность касания за 12 мес'+(D.cached?' · кэш':'')}
 
 fetch('/api/lab/mc').then(function(r){
-    if(r.status===401)throw new Error('Монте-Карло — личный раздел (суммы довнесений и цель). Войди как владелец 🔑');
+    if(r.status===401)throw new Error('Монте-Карло — личный раздел (суммы довнесений и цель). Войди как владелец: ключ в шапке');
     if(!r.ok)throw new Error('HTTP '+r.status);
     return r.json();
   })
@@ -316,7 +316,7 @@ function renderBR(D){
   $('#brCard').innerHTML=head+'<div class="lab-warn">Важно: данные по компаниям, которые СЕГОДНЯ в индексе. Обанкротившихся и вылетевших не видно — реальные исходы хуже показанных (survivorship bias).</div>'
     +rows
     +'<div class="ph" style="margin-top:14px">Запрос: что обычно происходит после…</div>'
-    +'<div class="fal-new"><input id="brQ" placeholder="напр.: срез гайденса дважды + инсайдеры покупают" style="width:340px">'
+    +'<div class="fal-new"><input id="brQ" placeholder="напр.: срез гайденса дважды + инсайдеры покупают" style="width:min(340px,100%)">'
     +'<button class="lab-btn" id="brAsk">Спросить</button></div>'
     +'<div id="brAns" style="margin-top:10px"></div>';
   hookBR();

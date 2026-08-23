@@ -2,9 +2,17 @@
 
 const UA = { 'User-Agent': 'Mozilla/5.0' };
 
+// Таймаут на каждый запрос: при мёртвой сети (VPN «чёрная дыра») fetch без
+// signal висит до дефолтных 5 минут undici — сборка данных растягивается
+// на десятки минут, и /api/data не отвечает. 8 секунд — как прямой
+// таймаут Tradernet.
+const FETCH_MS = 8000;
+const fetchT = (url, opts = {}) =>
+  fetch(url, { ...opts, signal: AbortSignal.timeout(opts.timeoutMs || FETCH_MS) });
+
 async function chart(symbol, range = '1y') {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
-  const r = await fetch(url, { headers: UA });
+  const r = await fetchT(url, { headers: UA });
   if (!r.ok) throw new Error(`${symbol}: HTTP ${r.status}`);
   const j = await r.json();
   const res = j?.chart?.result?.[0];
@@ -54,12 +62,12 @@ let authState = null; // { cookie, crumb, ts } — живёт час
 async function yahooAuth() {
   if (authState && Date.now() - authState.ts < 3600e3) return authState;
   // fc.yahoo.com отвечает 404, но выставляет cookie A3
-  const r1 = await fetch('https://fc.yahoo.com/', { headers: UA });
+  const r1 = await fetchT('https://fc.yahoo.com/', { headers: UA });
   let cookies = [];
   if (typeof r1.headers.getSetCookie === 'function') cookies = r1.headers.getSetCookie();
   else cookies = splitSetCookie(r1.headers.get('set-cookie'));
   const cookie = cookies.map(c => c.split(';')[0]).join('; ');
-  const r2 = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+  const r2 = await fetchT('https://query1.finance.yahoo.com/v1/test/getcrumb', {
     headers: { ...UA, ...(cookie ? { Cookie: cookie } : {}) },
   });
   if (!r2.ok) throw new Error('getcrumb: HTTP ' + r2.status);
@@ -79,7 +87,7 @@ async function earningsDate(symbol) {
   const { cookie, crumb } = await yahooAuth();
   const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}`
     + `?modules=calendarEvents&crumb=${encodeURIComponent(crumb)}`;
-  const r = await fetch(url, { headers: { ...UA, ...(cookie ? { Cookie: cookie } : {}) } });
+  const r = await fetchT(url, { headers: { ...UA, ...(cookie ? { Cookie: cookie } : {}) } });
   if (!r.ok) throw new Error(`${symbol}: quoteSummary HTTP ${r.status}`);
   const res = parseEarnings(await r.json());
   earnCache.set(symbol, { fetched: Date.now(), res });

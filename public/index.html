@@ -1,11 +1,11 @@
 <!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#e6e7e3">
-<title>Портфель · серебряный терминал</title>
+<title>Портфель · терминал</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23f4f4f2'/%3E%3Cpath d='M3 11l3-4 2.5 2.5L13 4' stroke='%238f6a1e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Manrope:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head><body>
 
@@ -20,7 +20,7 @@
         <path class="lp" d="M9 33 L18 21 L25 27 L39 11" fill="none" stroke="#8f6a1e" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
         <circle class="ld" cx="39" cy="11" r="3.2" fill="#0e8a5f"/>
       </svg>
-      <div class="boot-name">ПОРТФЕЛЬ·ТЕРМИНАЛ<small>v4 · серебряная серия</small></div>
+      <div class="boot-name">ПОРТФЕЛЬ·ТЕРМИНАЛ</div>
     </div>
     <div class="boot-tube"><div id="bootFill"></div><div class="glint"></div></div>
     <div class="boot-status" id="bootStatus">Подключение к рынку…</div>
@@ -40,9 +40,18 @@
   <span class="stamp" id="stamp">загрузка…</span>
   <span class="spacer"></span>
   <div class="search"><input id="q" type="text" placeholder="тикер или заметка" aria-label="Поиск по портфелю"></div>
+  <a class="hbtn" href="/lab" title="Лаборатория">
+    <svg viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .24.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.75-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.5 15h11"/><path d="M8.5 2h7"/></svg>
+    <span class="ht">Лаборатория</span>
+  </a>
   <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="rbg" cx="12" cy="12" r="9"/><circle id="ringFg" cx="12" cy="12" r="9"/></svg>
-  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">🔑</span></button>
-  <button class="iconbtn" id="btnRefresh" title="Обновить (R)" aria-label="Обновить"><span class="ic">↻</span></button>
+  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">
+    <svg class="l" viewBox="0 0 24 24"><circle cx="8" cy="16" r="4"/><path d="M11 13 21 3M17.5 6.5 20 9M14.5 9.5l2 2"/></svg>
+    <svg class="u" viewBox="0 0 24 24"><rect x="5" y="11" width="13" height="9" rx="2"/><path d="M8 11V7.5A4.5 4.5 0 0 1 16.9 6"/></svg>
+  </span></button>
+  <button class="iconbtn" id="btnRefresh" title="Обновить (R)" aria-label="Обновить"><span class="ic">
+    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
+  </span></button>
 </div></header>
 
 <div class="tape" aria-label="Тикер позиций"><div class="tape-in">
@@ -118,11 +127,11 @@
   <div id="noRes">Ничего не найдено — попробуй другой запрос</div>
 
   <div class="foot reveal" style="--d:200ms">
-    <a href="/lab" style="color:var(--acc)">Лаборатория → факторная модель · ENB · стресс-корреляции</a><br>
-    <button class="lab-btn" id="btnDecision" style="margin:6px 0">Записать решение</button>
-    <b>Правило:</b> базовый DCA всегда → множитель по VIX и просадке → резерв только при 2 сигналах из 3.<br>
-    <b>Источник позиций:</b> Tradernet API — данные подтягиваются сами при открытии и обновлении.<br>
-    Данные Yahoo Finance с задержкой. Не инвестиционная рекомендация.
+    <div class="foot-row">
+      <button class="lab-btn" id="btnDecision">Записать решение</button>
+    </div>
+    <p class="foot-rule"><b>Правило:</b> базовый DCA всегда → множитель по VIX и просадке → резерв только при 2 сигналах из 3.</p>
+    <p class="foot-disc">Позиции — Tradernet API, котировки — Yahoo Finance с задержкой.</p>
     <div id="failed"></div>
   </div>
 </main>

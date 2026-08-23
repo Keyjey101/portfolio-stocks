@@ -231,14 +231,50 @@ async function getCalendar() {
     .finally(() => { calCache.promise = null; });
   return calCache.promise;
 }
-const cache = { ts: 0, data: null, promise: null };
+// ── Раздача данных: живые → память → диск, и запрос никогда не виснет ──
+// Раньше: пока build() ждал зависшие fetch к Yahoo (нет таймаутов), ВСЕ
+// /api/data ждали тот же promise — страница застревала на загрузке.
+// Теперь: сборка идёт в фоне; запрос отдаёт свежее из памяти сразу, при
+// холодном старте ждёт максимум DATA_DEADLINE, затем — последняя успешная
+// сборка с диска. Деградировавшая сборка (рынок недоступен) не затирает
+// хорошую в памяти и не пишется на диск.
+const DATA_TTL = 25000;      // свежесть в памяти, как раньше
+const DATA_DEADLINE = 15000; // максимум ожидания HTTP-запросом
+const cache = { ts: 0, data: null, building: null, err: null };
+const { readCache, writeCache } = require('./cache');
+
+const isGoodData = d => d && d.spxPx != null && d.vixV != null
+  && (d.rows || []).filter(r => r.ok).length >= 3;
+
 function getData() {
-  if (cache.data && Date.now() - cache.ts < 25000) return Promise.resolve(cache.data);
-  if (cache.promise) return cache.promise;
-  cache.promise = build()
-    .then(d => { cache.ts = Date.now(); cache.data = d; cache.promise = null; return d; })
-    .catch(e => { cache.promise = null; throw e; });
-  return cache.promise;
+  if (!cache.building && !(cache.data && Date.now() - cache.ts < DATA_TTL)) {
+    cache.err = null;
+    cache.building = build()
+      .then(d => {
+        if (!cache.data || isGoodData(d)) {
+          cache.ts = Date.now();
+          cache.data = d;
+          if (isGoodData(d)) writeCache('data', d);
+        }
+      })
+      .catch(e => { cache.err = e; })
+      .finally(() => { cache.building = null; });
+  }
+  // stale-while-revalidate: есть что отдать — отдаём, пересборка идёт фоном
+  if (cache.data) return Promise.resolve(cache.data);
+  // холодный старт: ждём сборку недолго, дальше — диск, иначе честная ошибка
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (cache.data) { clearInterval(iv); resolve(cache.data); return; }
+      if (Date.now() - t0 > DATA_DEADLINE) {
+        clearInterval(iv);
+        const stale = readCache('data');
+        if (stale) resolve(stale);
+        else reject(new Error('рынок недоступен (' + (cache.err ? cache.err.message : 'Yahoo не отвечает') + ') — повтори через минуту'));
+      }
+    }, 250);
+  });
 }
 
 module.exports = { getData, getCalendar, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf, sanitizeForGuest };

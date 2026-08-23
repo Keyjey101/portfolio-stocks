@@ -23,11 +23,9 @@ function initAuth(onState){
   }).catch(function(){OWNER=false;AUTH_ON=false})
   .then(function(){
     document.body.classList.add(OWNER?'owner':'guest');
+    /* иконка ключ/замок переключается классом body.owner в CSS */
     var btn=document.getElementById('btnAuth');
-    if(btn){
-      btn.querySelector('.ic').textContent=OWNER?'🔓':'🔑';
-      btn.title=OWNER?'Выйти из режима владельца':'Вход владельца';
-    }
+    if(btn)btn.title=OWNER?'Выйти из режима владельца':'Вход владельца';
     if(onState)onState(OWNER);
   });
 
@@ -76,6 +74,14 @@ function lockGuest(sel){
   if(!b)return false;
   if(OWNER)return true;
   b.disabled=true;b.classList.add('locked');
-  b.title='Доступно владельцу — нажми 🔑 в шапке';
+  b.title='Доступно владельцу — ключ в шапке';
   return false;
 }
+
+/* высота плавучего острова: от неё отталкиваются липкие thead и нав-пилюля лаборатории */
+function setHH(){
+  var h=document.querySelector('header.top');
+  if(h)document.documentElement.style.setProperty('--hh',(h.offsetHeight+2)+'px');
+}
+window.addEventListener('resize',setHH);
+setHH();
