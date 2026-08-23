@@ -330,6 +330,18 @@ async function handle(req, res) {
 }
 
 function start() {
+  // префлайт: без записи в data/ журнал и все кэши молча падают с EACCES —
+  // говорим об этом одной строкой при старте, а не россыпью в логах планировщика
+  const DATA = path.join(__dirname, '..', 'data');
+  try {
+    fs.mkdirSync(path.join(DATA, 'cache'), { recursive: true });
+    fs.accessSync(DATA, fs.constants.W_OK);
+  } catch (e) {
+    const who = require('os').userInfo().username || 'www-data';
+    console.error(`\n  ⚠ Нет прав на запись в ${DATA} (${e.code || e.message}).`
+      + `\n    Журнал и кэши работать не будут. Лечение от root:`
+      + `\n      chown -R ${who}:${who} ${DATA}\n`);
+  }
   const server = http.createServer(handle);
   server.listen(PORT, HOST, () => {
     if (!process.env.PT_NO_SCHEDULER) scheduler.start();

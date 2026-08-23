@@ -76,6 +76,15 @@ systemctl enable --now portfolio-terminal
 journalctl -u portfolio-terminal -f     # смотрим лог старта
 ```
 
+**Обязательно сразу после старта** — отдай `data/` сервис-пользователю,
+иначе журнал и кэши молча не пишутся (в логе — россыпь `EACCES`):
+
+```bash
+sudo chown -R www-data:www-data /opt/portfolio-terminal/data
+# путь может быть любым (например, /home/portfolio-stocks) — важны права на data/
+sudo systemctl restart portfolio-terminal
+```
+
 ## 3. Проверка
 
 ```bash
