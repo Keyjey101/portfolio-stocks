@@ -454,3 +454,13 @@ svg .xh{stroke:var(--acc2);stroke-width:1;stroke-opacity:.6}
   .amb{opacity:.45}
   .vbox .core,.hchip,.vchip{background:#fbfbf9}
 }
+
+/* ═══ Публичный/владельческий режим ═══ */
+body.guest #btnDecision{display:none}
+button.locked,.lab-btn.locked{opacity:.45;cursor:not-allowed;filter:grayscale(.35)}
+#authModal .dec-card{width:min(420px,92vw)}
+.dec-full input{border:1px solid var(--line2);border-radius:var(--r-k);padding:9px 12px;font:13px var(--mono);background:rgba(255,255,255,.85);color:var(--ink);outline:none}
+.dec-full input:focus{border-color:rgba(143,106,30,.55)}
+#authErr{font:600 11px var(--mono);letter-spacing:.04em;min-height:14px}
+.guest-hint{color:var(--acc)}
+td.num.mut{color:var(--ink3)}

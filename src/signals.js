@@ -183,6 +183,30 @@ async function build() {
   };
 }
 
+// ── Публичный (гостевой) режим: доллары вырезаются, проценты остаются ──
+// Санитизация на сервере, а не на фронте: гость не должен уметь достать
+// qty/avg/val из ответа даже через F12. byTag превращается в доли (%).
+function sanitizeForGuest(D) {
+  const total = D.total > 0 ? D.total : 0;
+  const pct = v => (total > 0 ? (v / total) * 100 : null);
+  const rules = D.rules && {
+    ai: D.rules.ai && { ...D.rules.ai, val: null, excess: null },
+    cash: D.rules.cash && { ...D.rules.cash, short: null },
+    max: D.rules.max && { ...D.rules.max, pct: D.rules.max.pct }, // pct — доля, не деньги
+    broken: D.rules.broken && { ...D.rules.broken, val: null },
+  };
+  return {
+    ...D,
+    guest: true,
+    total: null,
+    cash: null,
+    cashPct: D.total + D.cash > 0 ? D.cash / (D.total + D.cash) * 100 : null,
+    byTag: Object.fromEntries(Object.entries(D.byTag || {}).map(([k, v]) => [k, pct(v)])),
+    rows: (D.rows || []).map(r => ({ ...r, qty: null, avg: null, val: null })),
+    rules,
+  };
+}
+
 // ── Календарь отчётов на 30 дней: позиции + вотчлист, кэш 6 ч ──
 const CAL_TTL = 6 * 3600e3;
 const calCache = { ts: 0, data: null, promise: null };
@@ -217,4 +241,4 @@ function getData() {
   return cache.promise;
 }
 
-module.exports = { getData, getCalendar, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf };
+module.exports = { getData, getCalendar, vixSignal, trendSignal, yieldSignal, firesOf, watchStatus, statusOf, sanitizeForGuest };

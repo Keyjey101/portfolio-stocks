@@ -1,5 +1,8 @@
-// Заголовки новостей Yahoo Finance: RSS https://feeds.finance.yahoo.com/rss/2.0/headline?s=TICKER
+// Заголовки новостей: основной источник — Yahoo Finance RSS,
+// фолбэк при сбое/пустоте — NewsAPI (ключ NEWSAPI_KEY в .env, не обязателен).
 // Парсер регэкспами (без XML-библиотек), CDATA и базовые сущности срезаются.
+
+const { loadEnv } = require('./env');
 
 function decode(s) {
   return s
@@ -31,12 +34,37 @@ function parseRss(xml) {
 
 const UA = { 'User-Agent': 'Mozilla/5.0' };
 
-async function fetchHeadlines(ticker, { fetchImpl = fetch, limit = 12 } = {}) {
+const newsapiKey = () => process.env.NEWSAPI_KEY || loadEnv().NEWSAPI_KEY || '';
+
+async function fetchYahooRss(ticker, { fetchImpl = fetch, limit = 12 } = {}) {
   const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(ticker)}`;
   const r = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error(`RSS ${ticker}: HTTP ${r.status}`);
-  const text = await r.text();
-  return parseRss(text).slice(0, limit);
+  const out = parseRss(await r.text()).slice(0, limit);
+  if (!out.length) throw new Error(`RSS ${ticker}: пусто`);
+  return out;
 }
 
-module.exports = { parseRss, fetchHeadlines };
+async function fetchNewsApi(ticker, { fetchImpl = fetch, limit = 12 } = {}) {
+  const key = newsapiKey();
+  if (!key) throw new Error('нет NEWSAPI_KEY');
+  const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(ticker)}&language=en&sortBy=publishedAt&pageSize=${limit}&apiKey=${key}`;
+  const r = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`NewsAPI ${ticker}: HTTP ${r.status}`);
+  const j = await r.json();
+  return (j.articles || [])
+    .map(a => ({ title: a.title, link: a.url, date: a.publishedAt ? Date.parse(a.publishedAt) : null }))
+    .filter(x => x.title)
+    .slice(0, limit);
+}
+
+async function fetchHeadlines(ticker, opts = {}) {
+  try {
+    return await fetchYahooRss(ticker, opts);
+  } catch (e) {
+    if (!newsapiKey()) throw e; // ключа нет — честно отдаём исходную ошибку Yahoo
+    return fetchNewsApi(ticker, opts);
+  }
+}
+
+module.exports = { parseRss, fetchHeadlines, fetchYahooRss, fetchNewsApi };

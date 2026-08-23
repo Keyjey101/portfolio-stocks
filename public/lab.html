@@ -17,6 +17,7 @@
     <h1>Лаборатория</h1>
   </div>
   <span class="spacer"></span>
+  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">🔑</span></button>
   <a class="lab-back" href="/">← к терминалу</a>
 </div></header>
 
@@ -134,5 +135,21 @@
   Эмпирика Yahoo Finance и SEC EDGAR. Не инвестиционная рекомендация.</div>
 </main>
 
+<div id="toasts"></div>
+
+<div id="authModal" class="dec-modal" hidden>
+  <div class="dec-card bez"><div class="core">
+    <div class="ph">Вход владельца</div>
+    <div class="cs" style="margin-bottom:10px">Публичный режим: аналитика и проценты видны всем. Кнопки агентов, журнал и Монте-Карло — после входа.</div>
+    <label class="dec-full">Пароль<input id="authPw" type="password" autocomplete="current-password"></label>
+    <div class="cs dn" id="authErr" style="min-height:14px"></div>
+    <div class="dec-actions">
+      <button class="lab-btn" id="authGo">Войти</button>
+      <button class="lab-btn" id="authCancel" style="border-color:var(--line2);color:var(--ink2)">Отмена</button>
+    </div>
+  </div></div>
+</div>
+
+<script src="/auth.js"></script>
 <script src="/lab.js"></script>
 </body></html>

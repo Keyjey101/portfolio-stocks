@@ -98,14 +98,43 @@ async function postJson(url, headers, body, timeoutMs, { fetchImpl = fetch, net 
   }
 }
 
+// Дневной бюджет: каждый сетевой поход в модель (включая ретраи) — +1 к счётчику
+// data/llm-budget.json. LLM_DAILY_LIMIT=0/не задан — без лимита.
+// Предохранитель от «зажатой кнопки» или зацикленного агента на платном ключе.
+const BUDGET_CACHE = 'llm-budget';
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const dailyLimit = () => {
+  const raw = process.env.LLM_DAILY_LIMIT ?? loadEnv().LLM_DAILY_LIMIT;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+function budgetState(readCache) {
+  const j = readCache ? readCache(BUDGET_CACHE, null) : null;
+  return j && j.date === todayKey() ? j : { date: todayKey(), count: 0 };
+}
+
+// checkpoint для инъекции в тестах
+const budgetIO = {
+  read() { return budgetState(require('./cache').readCache); },
+  bump(state) { require('./cache').writeCache(BUDGET_CACHE, state); },
+};
+
 async function chat(messages, { schema, task = 'chat', t = null, temperature = 0.2, fetchImpl, net, maxRetries = 2 } = {}) {
   const { key, base, model } = conf();
+  // бюджет проверяем до ключа: исчерпанный день должен кончаться без сети
+  const limit = dailyLimit();
+  let budget = budgetIO.read();
+  if (limit && budget.count >= limit) {
+    throw new Error(`дневной лимит LLM исчерпан (${budget.count}/${limit}) — продолжай завтра или подними LLM_DAILY_LIMIT`);
+  }
   if (!key) throw new Error('ZAI_API_KEY не задан (.env)');
   let attempt = 0, lastErr = '';
   const convo = messages.slice();
 
   while (attempt <= maxRetries) {
     attempt++;
+    if (limit) { budget = budgetState(); budget.count++; budgetIO.bump(budget); }
     let content;
     try {
       const r = await postJson(`${base}/chat/completions`, {
@@ -142,4 +171,4 @@ async function chat(messages, { schema, task = 'chat', t = null, temperature = 0
   throw new Error('LLM: недостижимая ветка');
 }
 
-module.exports = { chat, validate, extractJson };
+module.exports = { chat, validate, extractJson, budgetIO };

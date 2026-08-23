@@ -41,6 +41,7 @@
   <span class="spacer"></span>
   <div class="search"><input id="q" type="text" placeholder="тикер или заметка" aria-label="Поиск по портфелю"></div>
   <svg class="ring" viewBox="0 0 24 24" aria-hidden="true"><circle class="rbg" cx="12" cy="12" r="9"/><circle id="ringFg" cx="12" cy="12" r="9"/></svg>
+  <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">🔑</span></button>
   <button class="iconbtn" id="btnRefresh" title="Обновить (R)" aria-label="Обновить"><span class="ic">↻</span></button>
 </div></header>
 
@@ -72,6 +73,13 @@
     <div class="bez spot"><div class="core">
       <div class="ph">Календарь отчётов · 30 дней</div>
       <div class="calbody" id="calBody">загружаем календарь…</div>
+    </div></div>
+  </section>
+
+  <section class="cal reveal hide" id="macroSec" style="--d:195ms">
+    <div class="bez spot"><div class="core">
+      <div class="ph">Макро-фон · FRED</div>
+      <div class="calbody" id="macroBody">загружаем макро…</div>
     </div></div>
   </section>
 
@@ -122,6 +130,19 @@
 <div id="tip" role="tooltip" aria-hidden="true"></div>
 <div id="toasts"></div>
 
+<div id="authModal" class="dec-modal" hidden>
+  <div class="dec-card bez"><div class="core">
+    <div class="ph">Вход владельца</div>
+    <div class="cs" style="margin-bottom:10px">Публичный режим: вердикты, проценты и аналитика видны всем. Точные суммы, журнал и кнопки агентов — после входа.</div>
+    <label class="dec-full">Пароль<input id="authPw" type="password" autocomplete="current-password"></label>
+    <div class="cs dn" id="authErr" style="min-height:14px"></div>
+    <div class="dec-actions">
+      <button class="lab-btn" id="authGo">Войти</button>
+      <button class="lab-btn" id="authCancel" style="border-color:var(--line2);color:var(--ink2)">Отмена</button>
+    </div>
+  </div></div>
+</div>
+
 <div id="decModal" class="dec-modal" hidden>
   <div class="dec-card bez"><div class="core">
     <div class="ph" id="decTitle">Записать решение</div>
@@ -143,5 +164,6 @@
   </div></div>
 </div>
 
+<script src="/auth.js"></script>
 <script src="/app.js"></script>
 </body></html>

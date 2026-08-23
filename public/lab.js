@@ -6,6 +6,11 @@ function n2(v){return v==null?'—':(v>=0?'':'−')+Math.abs(v).toFixed(2)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function take(txt,warn){return '<div class="takeaway'+(warn?' tk-warn':'')+'"><b>Вывод:</b> '+txt+'</div>'}
 
+/* сессия: гость видит проценты, кнопки агентов — только владелец (сервер всё равно 401) */
+initAuth(function(owner){
+  if(owner)$$('.locked').forEach(function(el){el.disabled=false;el.classList.remove('locked');el.title=''});
+});
+
 fetch('/api/lab/factors').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
   .then(render).catch(function(e){$('#enbCard').textContent='Ошибка: '+e.message});
 
@@ -42,8 +47,12 @@ function renderLevels(D){
 }
 function GARCH_SUB(D){return 'P — вероятность касания за 12 мес'+(D.cached?' · кэш':'')}
 
-fetch('/api/lab/mc').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
-  .then(renderMC).catch(function(e){$('#mcCard').textContent='Ошибка: '+e.message});
+fetch('/api/lab/mc').then(function(r){
+    if(r.status===401)throw new Error('Монте-Карло — личный раздел (суммы довнесений и цель). Войди как владелец 🔑');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  })
+  .then(renderMC).catch(function(e){$('#mcCard').innerHTML='<div class="cs mut">'+esc(e.message)+'</div>';$('#mcSub').textContent='недоступно'});
 
 function renderMC(D){
   var P=D.params, B=D.base;
@@ -188,16 +197,18 @@ function renderFalsify(D){
     +'<div class="fal-new"><input id="falTicker" placeholder="ТИКЕР (напр. TSM)" maxlength="8">'
     +'<button class="lab-btn" id="falGen">Сгенерировать 3 условия</button></div>';
   var genBtn=$('#falGen');
-  if(genBtn)genBtn.addEventListener('click',function(){
-    genBtn.disabled=true;genBtn.textContent='Генерируем…';
-    post('/api/lab/falsify',{action:'generate',t:($('#falTicker').value||'').trim().toUpperCase()})
-      .then(function(){location.reload()}).catch(function(e){alert(e.message);genBtn.disabled=false;genBtn.textContent='Сгенерировать 3 условия'});
-  });
+  if(genBtn){
+    if(!lockGuest(genBtn))genBtn.addEventListener('click',function(){
+      genBtn.disabled=true;genBtn.textContent='Генерируем…';
+      post('/api/lab/falsify',{action:'generate',t:($('#falTicker').value||'').trim().toUpperCase()})
+        .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');genBtn.disabled=false;genBtn.textContent='Сгенерировать 3 условия'});
+    });
+  }
   $$('#falCard [data-fal-check]').forEach(function(b){
-    b.addEventListener('click',function(){
+    if(!lockGuest(b))b.addEventListener('click',function(){
       b.disabled=true;b.textContent='Проверяем…';
       post('/api/lab/falsify',{action:'check',t:b.dataset.falCheck})
-        .then(function(){location.reload()}).catch(function(e){alert(e.message);b.disabled=false;b.textContent='Проверить'});
+        .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');b.disabled=false;b.textContent='Проверить'});
     });
   });
 }
@@ -240,14 +251,14 @@ function renderCommittee(D){
     +'<button class="lab-btn" id="comScore">Оценить созревшие</button></div></div>'
     +'<div><div class="ph">Последние прогнозы</div>'+(preds||'<div class="cs mut">Комитет ещё не созывался.</div>')+'</div></div>';
   var run=$('#comRun');
-  if(run)run.addEventListener('click',function(){
+  if(run&&lockGuest(run))run.addEventListener('click',function(){
     run.disabled=true;run.textContent='Комитет думает…';
-    post('/api/lab/committee',{action:'run'}).then(function(){location.reload()}).catch(function(e){alert(e.message);run.disabled=false;run.textContent='Созвать комитет'});
+    post('/api/lab/committee',{action:'run'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');run.disabled=false;run.textContent='Созвать комитет'});
   });
   var sc=$('#comScore');
-  if(sc)sc.addEventListener('click',function(){
+  if(sc&&lockGuest(sc))sc.addEventListener('click',function(){
     sc.disabled=true;sc.textContent='Оцениваем…';
-    post('/api/lab/committee',{action:'score'}).then(function(){location.reload()}).catch(function(e){alert(e.message);sc.disabled=false;sc.textContent='Оценить созревшие'});
+    post('/api/lab/committee',{action:'score'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');sc.disabled=false;sc.textContent='Оценить созревшие'});
   });
 }
 
@@ -312,15 +323,15 @@ function renderBR(D){
 }
 function hookBR(){
   var bf=$('#brBackfill');
-  if(bf)bf.addEventListener('click',function(){
+  if(bf&&lockGuest(bf))bf.addEventListener('click',function(){
     bf.disabled=true;bf.textContent='Бэкфилл идёт (минуты)…';
     fetch('/api/lab/baserates?backfill=1').then(function(r){return r.json()}).then(function(j){
       if(!j.ok)throw new Error(j.error);
       location.reload();
-    }).catch(function(e){alert(e.message);bf.disabled=false;bf.textContent='Бэкфилл вселенной'});
+    }).catch(function(e){basicToast(e.message,'r');bf.disabled=false;bf.textContent='Бэкфилл вселенной'});
   });
   var ask=$('#brAsk');
-  if(ask)ask.addEventListener('click',function(){
+  if(ask&&lockGuest(ask))ask.addEventListener('click',function(){
     var q=($('#brQ').value||'').trim(); if(!q)return;
     ask.disabled=true;ask.textContent='…';
     fetch('/api/lab/baserates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q})})
@@ -333,7 +344,7 @@ function hookBR(){
           +'<div class="det-reason">Приор модели (МНЕНИЕ, не данные): '+esc(pr.note)+' · медиана 12м ~'+n2(pr.median12m)+'%</div>'
           +'</div>';
         ask.disabled=false;ask.textContent='Спросить';
-      }).catch(function(e){alert(e.message);ask.disabled=false;ask.textContent='Спросить'});
+      }).catch(function(e){basicToast(e.message,'r');ask.disabled=false;ask.textContent='Спросить'});
   });
 }
 fetch('/api/lab/baserates').then(function(r){return r.json()}).then(renderBR).catch(function(e){$('#brSub').textContent='ошибка: '+e.message});
@@ -375,12 +386,12 @@ function renderCC(D){
     +'<div class="cs mut" style="margin-top:8px">Прокси — настроение рынка; капекс — что компании реально тратят. Расхождение между ними и есть сигнал стадии.</div>'
     +'</div></div>';
   var g=$('#gpuBtn');
-  if(g)g.addEventListener('click',function(){
-    var v=+($('#gpuIn').value||0); if(!(v>0)){alert('введи цену');return}
+  if(g&&lockGuest(g))g.addEventListener('click',function(){
+    var v=+($('#gpuIn').value||0); if(!(v>0)){basicToast('введи цену аренды GPU','o');return}
     g.disabled=true;
     fetch('/api/lab/capcycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'gpu',usd:v})})
       .then(function(r){return r.json()}).then(function(j){ if(!j.ok)throw new Error(j.error); location.reload(); })
-      .catch(function(e){alert(e.message);g.disabled=false});
+      .catch(function(e){basicToast(e.message,'r');g.disabled=false});
   });
 }
 fetch('/api/lab/capcycle').then(function(r){return r.json()}).then(renderCC).catch(function(e){$('#ccSub').textContent='ошибка: '+e.message});
