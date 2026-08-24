@@ -184,10 +184,12 @@ async function handle(req, res) {
             const p = readBody(req)
               .then(body => body.action === 'check'
                 ? falsify.check(body.t)
-                : falsify.generate(body.t));
+                : body.action === 'reset'
+                  ? Promise.resolve({ cleared: falsify.reset(body.t) })
+                  : falsify.generate(body.t));
             return p.then(rec => ({ ok: true, rec }));
           })()
-        : Promise.resolve({ ok: true, items: falsify.getRegistry() });
+        : Promise.resolve({ ok: true, items: falsify.getRegistry(), ov: require('./overrides').all() });
       const payload = await out;
       json(res, 200, payload);
     } catch (e) {

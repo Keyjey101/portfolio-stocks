@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const defaultLlm = require('../llm');
+const { PROMPTS } = require('../prompts');
 const { readCache } = require('../cache');
 const { getCalendar } = require('../signals');
 const { getData } = require('../signals');
@@ -106,29 +107,7 @@ async function defaultContextLoader() {
 }
 
 function rolePrompt(role, ctx) {
-  const persona = {
-    bull: 'Ты убеждённый бык: ищи аргументы за рост, но давай честные вероятности.',
-    bear: 'Ты убеждённый медведь: ищи аргументы за падение, но давай честные вероятности.',
-    devil: 'Ты адвокат дьявола: атакуй консенсус, ищи то, что все упускают.',
-    baserates: 'Ты опираешься только на базовые ставки и историческую частоту событий, без нарративов.',
-  }[role];
-  return [
-    persona,
-    '',
-    'Портфель: $' + (ctx.total || '?') + ', вердикт системы: ' + (ctx.verdict || '?') + '.',
-    'Факторные экспозиции: ' + (ctx.topFactors?.join(', ') || 'нет') + '.',
-    'Флаги детектора: ' + (ctx.detectorFlags?.join(', ') || 'нет') + '.',
-    'Отчёты близко: ' + (ctx.earnings?.join(', ') || 'нет') + '.',
-    'S&P ' + (ctx.spx || '?') + ', VIX ' + (ctx.vix || '?') + '.',
-    'Тикеры портфеля: ' + (ctx.tickers?.join(', ') || '') + '.',
-    '',
-    'Дай РОВНО ПЯТЬ прогнозов на 7–365 дней вперёд в строгой грамматике:',
-    '{"kind":"price_above"|"price_below","t":"ТИКЕР","ref":<цена сейчас>,"x":<доля, напр. 0.08>,"horizon_days":N}',
-    '{"kind":"index_above"|"index_below","ref":<уровень S&P сейчас>,"x":<доля>,"horizon_days":N}',
-    '{"kind":"vix_above"|"vix_below","level":N,"horizon_days":N}',
-    'prob — твоя вероятность 0.05..0.95; rationale — одна фраза.',
-    'Верни ТОЛЬКО JSON: {"predictions":[{…5 шт…}]}',
-  ].join('\n');
+  return PROMPTS.committee.user({ role, ctx });
 }
 
 async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLoader } = {}) {
@@ -137,7 +116,7 @@ async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLo
   for (const role of ROLES) {
     if (rows.length) await new Promise(r => setTimeout(r, 3000)); // бережём rate-limit
     const v = await llm.chat(
-      [{ role: 'system', content: 'Ты участник инвестиционного комитета. Отвечай только JSON.' },
+      [{ role: 'system', content: PROMPTS.committee.system },
        { role: 'user', content: rolePrompt(role.id, ctx) }],
       { schema: { predictions: 'array' }, task: 'committee', t: role.id, temperature: 0.4 },
     ).catch(() => ({ predictions: [] }));

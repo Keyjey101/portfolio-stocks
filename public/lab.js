@@ -174,6 +174,8 @@ function renderDetector(D){
 
 function renderFalsify(D){
   var items=D.items||[];
+  var OV=D.ov||{};
+  function fmtLv(lv){return lv.map(function(v){return v==null?'—':v}).join('/')}
   var trig=items.filter(function(r){return r.status==='triggered'}).length;
   var act=items.filter(function(r){return r.status==='active'}).length;
   $('#falSub').textContent=items.length?act+' активных'+(trig?' · '+trig+' триггеров!':''):'пусто';
@@ -188,9 +190,15 @@ function renderFalsify(D){
       var vd=last?(last.verdicts||[]).find(function(x){return x.i===i}):null;
       return '<li>'+esc(c.text)+(vd?' — '+(vd.triggered?'<b class="dn">сработало</b>':esc(vd.evidence)):'')+'</li>';
     }).join('');
+    var ovm=OV[r.t];
+    var ovl=ovm?'<div class="det-conf mut">агент обновил мета '+new Date(ovm._at).toLocaleDateString('ru-RU')
+      +(ovm.lv?': уровни '+fmtLv(ovm.lv):'')
+      +(ovm.until?': ждёт «'+esc(ovm.until.event)+'»':'')
+      +((ovm._was&&ovm._was.lv)?' (было '+fmtLv(ovm._was.lv)+')':'')
+      +' · <button class="lab-btn" data-fal-reset="'+r.t+'">вернуть дефолт</button></div>':'';
     return '<div class="fal-card"><div class="det-h"><b>'+r.t+'</b>'+st
       +(last?'<span class="det-sig mut">чек '+new Date(last.date).toLocaleDateString('ru-RU')+'</span>':'<span class="det-sig mut">ещё не проверялась</span>')
-      +'</div><div class="det-reason">тезис: '+esc(r.thesis)+'</div><ol class="fal-conds">'+conds+'</ol>'
+      +'</div><div class="det-reason">тезис: '+esc(r.thesis)+'</div><ol class="fal-conds">'+conds+'</ol>'+ovl
       +'<button class="lab-btn" data-fal-check="'+r.t+'">Проверить</button></div>';
   }).join('');
   $('#falCard').innerHTML=head+(rows||'<div class="cs mut">Реестр пуст. Впиши тикер ниже — например, TSM. Это займёт ~10 секунд, а агент один раз сформулирует, при каких условиях тезис мёртв.</div>')
@@ -198,18 +206,28 @@ function renderFalsify(D){
     +'<button class="lab-btn" id="falGen">Сгенерировать 3 условия</button></div>';
   var genBtn=$('#falGen');
   if(genBtn){
-    if(!lockGuest(genBtn))genBtn.addEventListener('click',function(){
+    genBtn.addEventListener('click',function(){
       genBtn.disabled=true;genBtn.textContent='Генерируем…';
       post('/api/lab/falsify',{action:'generate',t:($('#falTicker').value||'').trim().toUpperCase()})
         .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');genBtn.disabled=false;genBtn.textContent='Сгенерировать 3 условия'});
     });
+    lockGuest(genBtn);
   }
   $$('#falCard [data-fal-check]').forEach(function(b){
-    if(!lockGuest(b))b.addEventListener('click',function(){
+    b.addEventListener('click',function(){
       b.disabled=true;b.textContent='Проверяем…';
       post('/api/lab/falsify',{action:'check',t:b.dataset.falCheck})
         .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');b.disabled=false;b.textContent='Проверить'});
     });
+    lockGuest(b);
+  });
+  $$('#falCard [data-fal-reset]').forEach(function(b){
+    b.addEventListener('click',function(){
+      b.disabled=true;
+      post('/api/lab/falsify',{action:'reset',t:b.dataset.falReset})
+        .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');b.disabled=false});
+    });
+    lockGuest(b);
   });
 }
 
@@ -251,15 +269,21 @@ function renderCommittee(D){
     +'<button class="lab-btn" id="comScore">Оценить созревшие</button></div></div>'
     +'<div><div class="ph">Последние прогнозы</div>'+(preds||'<div class="cs mut">Комитет ещё не созывался.</div>')+'</div></div>';
   var run=$('#comRun');
-  if(run&&lockGuest(run))run.addEventListener('click',function(){
-    run.disabled=true;run.textContent='Комитет думает…';
-    post('/api/lab/committee',{action:'run'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');run.disabled=false;run.textContent='Созвать комитет'});
-  });
+  if(run){
+    run.addEventListener('click',function(){
+      run.disabled=true;run.textContent='Комитет думает…';
+      post('/api/lab/committee',{action:'run'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');run.disabled=false;run.textContent='Созвать комитет'});
+    });
+    lockGuest(run);
+  }
   var sc=$('#comScore');
-  if(sc&&lockGuest(sc))sc.addEventListener('click',function(){
-    sc.disabled=true;sc.textContent='Оцениваем…';
-    post('/api/lab/committee',{action:'score'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');sc.disabled=false;sc.textContent='Оценить созревшие'});
-  });
+  if(sc){
+    sc.addEventListener('click',function(){
+      sc.disabled=true;sc.textContent='Оцениваем…';
+      post('/api/lab/committee',{action:'score'}).then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');sc.disabled=false;sc.textContent='Оценить созревшие'});
+    });
+    lockGuest(sc);
+  }
 }
 
 fetch('/api/lab/detector').then(function(r){return r.json()}).then(renderDetector).catch(function(e){$('#detSub').textContent='ошибка: '+e.message});
@@ -323,29 +347,35 @@ function renderBR(D){
 }
 function hookBR(){
   var bf=$('#brBackfill');
-  if(bf&&lockGuest(bf))bf.addEventListener('click',function(){
-    bf.disabled=true;bf.textContent='Бэкфилл идёт (минуты)…';
-    fetch('/api/lab/baserates?backfill=1').then(function(r){return r.json()}).then(function(j){
-      if(!j.ok)throw new Error(j.error);
-      location.reload();
-    }).catch(function(e){basicToast(e.message,'r');bf.disabled=false;bf.textContent='Бэкфилл вселенной'});
-  });
-  var ask=$('#brAsk');
-  if(ask&&lockGuest(ask))ask.addEventListener('click',function(){
-    var q=($('#brQ').value||'').trim(); if(!q)return;
-    ask.disabled=true;ask.textContent='…';
-    fetch('/api/lab/baserates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q})})
-      .then(function(r){return r.json()}).then(function(j){
+  if(bf){
+    bf.addEventListener('click',function(){
+      bf.disabled=true;bf.textContent='Бэкфилл идёт (минуты)…';
+      fetch('/api/lab/baserates?backfill=1').then(function(r){return r.json()}).then(function(j){
         if(!j.ok)throw new Error(j.error);
-        var res=j.result, emp=res.empirical, pr=res.llmPrior;
-        $('#brAns').innerHTML='<div class="det-card">'
-          +'<div class="det-h"><b>класс: '+esc(res.classification)+'</b></div>'
-          +(emp?'<div class="det-reason">Эмпирика (S&P 500, '+emp.n+' событий): медиана 12м <b>'+n2(emp.medianFwd[3])+'%</b> (квартили '+n2(emp.q1Fwd[3])+'…'+n2(emp.q3Fwd[3])+'%), восстановились за год '+(emp.recoveredShare!=null?(emp.recoveredShare*100).toFixed(0)+'%':'—')+' · <i>survivorship-biased</i></div>':'<div class="det-reason mut">Для этого класса эмпирики нет — только мнение модели.</div>')
-          +'<div class="det-reason">Приор модели (МНЕНИЕ, не данные): '+esc(pr.note)+' · медиана 12м ~'+n2(pr.median12m)+'%</div>'
-          +'</div>';
-        ask.disabled=false;ask.textContent='Спросить';
-      }).catch(function(e){basicToast(e.message,'r');ask.disabled=false;ask.textContent='Спросить'});
-  });
+        location.reload();
+      }).catch(function(e){basicToast(e.message,'r');bf.disabled=false;bf.textContent='Бэкфилл вселенной'});
+    });
+    lockGuest(bf);
+  }
+  var ask=$('#brAsk');
+  if(ask){
+    ask.addEventListener('click',function(){
+      var q=($('#brQ').value||'').trim(); if(!q)return;
+      ask.disabled=true;ask.textContent='…';
+      fetch('/api/lab/baserates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:q})})
+        .then(function(r){return r.json()}).then(function(j){
+          if(!j.ok)throw new Error(j.error);
+          var res=j.result, emp=res.empirical, pr=res.llmPrior;
+          $('#brAns').innerHTML='<div class="det-card">'
+            +'<div class="det-h"><b>класс: '+esc(res.classification)+'</b></div>'
+            +(emp?'<div class="det-reason">Эмпирика (S&P 500, '+emp.n+' событий): медиана 12м <b>'+n2(emp.medianFwd[3])+'%</b> (квартили '+n2(emp.q1Fwd[3])+'…'+n2(emp.q3Fwd[3])+'%), восстановились за год '+(emp.recoveredShare!=null?(emp.recoveredShare*100).toFixed(0)+'%':'—')+' · <i>survivorship-biased</i></div>':'<div class="det-reason mut">Для этого класса эмпирики нет — только мнение модели.</div>')
+            +'<div class="det-reason">Приор модели (МНЕНИЕ, не данные): '+esc(pr.note)+' · медиана 12м ~'+n2(pr.median12m)+'%</div>'
+            +'</div>';
+          ask.disabled=false;ask.textContent='Спросить';
+        }).catch(function(e){basicToast(e.message,'r');ask.disabled=false;ask.textContent='Спросить'});
+    });
+    lockGuest(ask);
+  }
 }
 fetch('/api/lab/baserates').then(function(r){return r.json()}).then(renderBR).catch(function(e){$('#brSub').textContent='ошибка: '+e.message});
 
@@ -386,12 +416,15 @@ function renderCC(D){
     +'<div class="cs mut" style="margin-top:8px">Прокси — настроение рынка; капекс — что компании реально тратят. Расхождение между ними и есть сигнал стадии.</div>'
     +'</div></div>';
   var g=$('#gpuBtn');
-  if(g&&lockGuest(g))g.addEventListener('click',function(){
-    var v=+($('#gpuIn').value||0); if(!(v>0)){basicToast('введи цену аренды GPU','o');return}
-    g.disabled=true;
-    fetch('/api/lab/capcycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'gpu',usd:v})})
-      .then(function(r){return r.json()}).then(function(j){ if(!j.ok)throw new Error(j.error); location.reload(); })
-      .catch(function(e){basicToast(e.message,'r');g.disabled=false});
-  });
+  if(g){
+    g.addEventListener('click',function(){
+      var v=+($('#gpuIn').value||0); if(!(v>0)){basicToast('введи цену аренды GPU','o');return}
+      g.disabled=true;
+      fetch('/api/lab/capcycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'gpu',usd:v})})
+        .then(function(r){return r.json()}).then(function(j){ if(!j.ok)throw new Error(j.error); location.reload(); })
+        .catch(function(e){basicToast(e.message,'r');g.disabled=false});
+    });
+    lockGuest(g);
+  }
 }
 fetch('/api/lab/capcycle').then(function(r){return r.json()}).then(renderCC).catch(function(e){$('#ccSub').textContent='ошибка: '+e.message});

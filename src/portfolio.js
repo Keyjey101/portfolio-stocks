@@ -6,6 +6,7 @@
 // tag: core | real | quality | lotto | exit | index
 // ─────────────────────────────────────────────────────────────
 const { getPositions, posSource } = require('./tradernet');
+const { merged: mergeOv } = require('./overrides');
 
 const META = {
   // AI-ядро
@@ -70,9 +71,11 @@ const META = {
 // плановая строка: ежемесячный DCA в ITOT (позиции в API нет)
 const ITOT = { t:'ITOT', qty:0, avg:0, lv:[999,999,999], tag:'index', note:'★ ежемесячный DCA' };
 
+// дефолт мета: hardcoded-уровни/заметки; при работе с тикером в /lab
+// агент может обновить их (data/overrides.json, только lv/until/note)
 async function positions() {
   const list = (await getPositions())
-    .map(p => ({ ...p, ...(META[p.t] || { tag:'quality', lv:null, note:'' }) }));
+    .map(p => ({ ...p, ...mergeOv(p.t, META[p.t] || { tag:'quality', lv:null, note:'' }) }));
   list.push(ITOT);
   return list;
 }
@@ -84,6 +87,9 @@ const WATCH = [
   { t:'MKSI', note:'21x fwd, $1,4 млрд конвертов' },
 ];
 
+// WATCH с оверрайдами агента (сигналы/статусы видят свежие lv)
+const watchlist = () => WATCH.map(w => mergeOv(w.t, w));
+
 const CASH = 1000;
 
 // Правила книги — потолки, которые держали полгода; считает машина
@@ -94,4 +100,4 @@ const RULES = {
   hiddenAiFactor: 0.3,  // скрытая AI-бета индексов (VTI+ITOT × 0,3)
 };
 
-module.exports = { positions, posSource, META, WATCH, CASH, RULES };
+module.exports = { positions, posSource, META, WATCH, watchlist, CASH, RULES };

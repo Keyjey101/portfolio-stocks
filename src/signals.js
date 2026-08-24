@@ -1,6 +1,6 @@
 // Рыночные сигналы, вердикт и сборка данных (с кэшем 25 сек)
 
-const { positions, posSource, WATCH, CASH, RULES } = require('./portfolio');
+const { positions, posSource, watchlist, CASH, RULES } = require('./portfolio');
 const { chart, sma, spark, pool, earningsDate } = require('./yahoo');
 const { rulesCheck, overdueDays } = require('./rules');
 
@@ -159,7 +159,7 @@ async function build() {
     }
   });
 
-  const watch = await pool(WATCH, async w => {
+  const watch = await pool(watchlist(), async w => {
     try {
       const d = await chart(w.t, '3mo');
       const px = d.price;
@@ -216,7 +216,7 @@ async function getCalendar() {
   if (calCache.promise) return calCache.promise;
   calCache.promise = (async () => {
     const list = await positions().catch(() => []);
-    const symbols = [...new Set([...list.map(p => p.t), ...WATCH.map(w => w.t)])]
+    const symbols = [...new Set([...list.map(p => p.t), ...watchlist().map(w => w.t)])]
       .filter(t => /^[A-Z][A-Z0-9.-]*$/.test(t)); // только обыкновенные тикеры
     const items = [];
     await pool(symbols, async t => {

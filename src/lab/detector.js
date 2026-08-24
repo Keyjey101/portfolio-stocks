@@ -67,9 +67,10 @@ function detectFlags(residuals, { k = 2.5, cum = 5 } = {}) {
 const fs = require('fs');
 const path = require('path');
 const { loadPrices, alignPrices, FACTOR_PROXIES } = require('./factors');
-const { positions: defaultPositions, META } = require('../portfolio');
+const { positions: defaultPositions } = require('../portfolio');
 const { readCache, writeCache } = require('../cache');
 const { fetchHeadlines } = require('../news');
+const { PROMPTS } = require('../prompts');
 const { edgarRecent } = require('../edgar');
 const defaultLlm = require('../llm');
 
@@ -97,25 +98,9 @@ async function attribute(t, flag, meta, llm) {
     fetchHeadlines(t).catch(() => []),
     edgarRecent(t).catch(() => []),
   ]);
-  const prompt = [
-    `Тикер: ${t}. Позиция: тег ${meta?.tag || '?'}, заметка: «${meta?.note || '—'}».`,
-    `Факторная модель: аномалия дня ${flag.lastSigma?.toFixed(1) ?? '?'}σ, за 5 дней ${flag.cumSigma?.toFixed(1) ?? '?'}σ (остаток = движение бумаги минус движение, объяснённое факторами рынка/секторов).`,
-    news.length ? 'Заголовки новостей (последние):' : 'Новостей нет.',
-    ...news.slice(0, 10).map(n => `- ${n.title}${n.date ? ' (' + new Date(n.date).toISOString().slice(0, 10) + ')' : ''}`),
-    filings.length ? 'Свежие филлинги SEC:' : 'Филлингов нет.',
-    ...filings.slice(0, 5).map(f => `- ${f.form} от ${f.date}: ${f.url}`),
-    '',
-    'Классифицируй движение одной строкой verdict:',
-    'beta_move — движение объяснимо факторами (сектор/рынок), тезис цел;',
-    'idiosyncratic_temporary — бумажная/idio-аномалия без ущерба бизнесу (разовые продажи, шум, техфактор);',
-    'thesis_damage — событие бьёт по опоре тезиса (гайденс, конкурент, регулятор, спрос).',
-    'reason — одна фраза с конкретной причиной; pillar — какая опора тезиса задета (или «—»); confidence — 0..1.',
-    'Верни ТОЛЬКО JSON: {"verdict":"beta_move|idiosyncratic_temporary|thesis_damage","reason":"…","pillar":"…","confidence":0.0}',
-  ].join('\n');
-
   const v = await llm.chat(
-    [{ role: 'system', content: 'Ты строгий аналитик фондового рынка. Отвечай только JSON.' },
-     { role: 'user', content: prompt }],
+    [{ role: 'system', content: PROMPTS.detector.system },
+     { role: 'user', content: PROMPTS.detector.user({ t, meta, flag, news, filings }) }],
     { schema: VERDICT_SCHEMA, task: 'detector', t, temperature: 0.2 },
   );
   return { ...v, news, filings };
@@ -154,7 +139,7 @@ async function runDetector({ force = false, positionsLoader = defaultPositions,
         continue;
       }
       try {
-        const v = await attribute(p.t, flags[p.t], META[p.t], llm);
+        const v = await attribute(p.t, flags[p.t], p, llm); // p — слитая мета (дефолт + оверрайд агента)
         const rec = { t: p.t, ...flags[p.t], checkedAt: new Date().toISOString(), ...v };
         fs.writeFileSync(file, JSON.stringify(rec, null, 2));
         verdicts.push(rec);

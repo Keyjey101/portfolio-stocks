@@ -7,6 +7,7 @@ const { chart, pool } = require('../yahoo');
 const { readCache, writeCache } = require('../cache');
 const { quantile } = require('../math/stats');
 const defaultLlm = require('../llm');
+const { PROMPTS } = require('../prompts');
 
 const ROOT = path.join(__dirname, '..', '..');
 const DIR = path.join(ROOT, 'data', 'baserates');
@@ -18,7 +19,7 @@ function parseSp500(html) {
   if (!html || typeof html !== 'string') return [];
   const m = html.match(/<table[^>]*id="constituents"[\s\S]*?<\/table>/i);
   if (!m) return [];
-  const rows = m[0].match(/<tr>[^]*?<\/tr>/gi) || [];
+  const rows = m[0].match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
   const out = [];
   for (const row of rows) {
     const td = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/i);
@@ -33,10 +34,19 @@ async function fetchUniverse({ fetchImpl = fetch, limit } = {}) {
   const cached = readCache('sp500-universe', 89 * 864e5);
   let symbols = cached;
   if (!symbols) {
-    const r = await fetchImpl(WIKI_URL, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
-    if (!r.ok) throw new Error('wikipedia: HTTP ' + r.status);
-    symbols = parseSp500(await r.text());
-    if (symbols.length < 100) throw new Error('wikipedia: распознано ' + symbols.length + ' тикеров');
+    // Wikipedia за VPN иногда отдаёт разовый сбой — бэкфилл одноразовый, дерзаем трижды
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3 && !symbols; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, 2000));
+      try {
+        const r = await fetchImpl(WIKI_URL, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+        if (!r.ok) throw new Error('wikipedia: HTTP ' + r.status);
+        const parsed = parseSp500(await r.text());
+        if (parsed.length < 100) throw new Error('wikipedia: распознано ' + parsed.length + ' тикеров');
+        symbols = parsed;
+      } catch (e) { lastErr = e; }
+    }
+    if (!symbols) throw lastErr;
     writeCache('sp500-universe', symbols);
   }
   return (limit && limit < symbols.length) ? symbols.slice(0, limit) : symbols;
@@ -152,15 +162,8 @@ async function query(text, { llm = defaultLlm } = {}) {
     ? Object.entries(agg.counts).map(([k, v]) => `${k} (эмпирика: ${v} событий)`).join(', ')
     : 'нет';
   const v = await llm.chat(
-    [{ role: 'system', content: 'Ты аналитик базовых ставок. Отвечай только JSON.' },
-     { role: 'user', content: [
-       'Событие инвестора: «' + text + '».',
-       'Классифицируй его. Эмпирические классы: ' + classes + '.',
-       'Если не подходит ничего — class=none.',
-       'prior_note — как обычно складывается исход таких событий по экономической логике (1 фраза);',
-       'prior_median_12m — твоя оценка медианной 12-мес доходности после события, % (это МНЕНИЕ МОДЕЛИ, будет помечено).',
-       'Верни ТОЛЬКО JSON: {"class":"…","prior_note":"…","prior_median_12m":0.0}',
-     ].join('\n') }],
+    [{ role: 'system', content: PROMPTS.baserates.system },
+     { role: 'user', content: PROMPTS.baserates.user({ text, classes }) }],
     { schema: QUERY_SCHEMA, task: 'baserates-query', temperature: 0.2 },
   );
   const emp = agg && agg.agg[v.class] && agg.agg[v.class].n > 0 ? agg.agg[v.class] : null;

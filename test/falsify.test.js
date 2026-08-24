@@ -11,7 +11,12 @@ const hadOrig = fs.existsSync(REG);
 if (hadOrig) fs.copyFileSync(REG, TMP);
 fs.writeFileSync(REG, '[]');
 
-const { generate, check, getRegistry, saveRegistry } = require('../src/lab/falsify');
+// оверрайды меты — в отдельный файл (параллельные тест-файлы не делят состояние)
+const OVR = path.join(__dirname, '..', 'data', 'cache', '.overrides-test-fal.json');
+process.env.OVERRIDES_FILE = OVR;
+
+const { generate, check, getRegistry, saveRegistry, reset } = require('../src/lab/falsify');
+const overrides = require('../src/overrides');
 
 const llmGen = { chat: async () => ({
   thesis: 'Рост спроса на AI-энергетику, контрактный цикл',
@@ -20,6 +25,23 @@ const llmGen = { chat: async () => ({
     { text: 'потеря крупнейшего контракта (>15% выручки)' },
     { text: 'капекс-цикл атомной генерации свёрнут >2 лет' },
   ],
+  levels: [null, 220, 195],
+  until_event: 'Q3 отчёт',
+  until_check: 'рост загрузки мощностей',
+  note: 'контракты подтверждаются',
+}) };
+// уровни структурно невалидны (длина 1) → lv не пишется, until пишется
+const llmGenBadLv = { chat: async () => ({
+  thesis: 'Тезис',
+  conditions: [
+    { text: 'условие первое достаточно длинное' },
+    { text: 'условие второе достаточно длинное' },
+    { text: 'условие третье достаточно длинное' },
+  ],
+  levels: [9999],
+  until_event: '',
+  until_check: '',
+  note: 'Информации недостаточно',
 }) };
 const llmCheck = { chat: async () => ({
   verdicts: [
@@ -27,6 +49,9 @@ const llmCheck = { chat: async () => ({
     { i: 1, triggered: false, evidence: 'контракты в силе' },
     { i: 2, triggered: true, evidence: 'задержка программы на 30 мес' },
   ],
+  levels: [null, 210, 190],
+  until_event: 'Q4 отчёт',
+  until_check: 'подтверждение плана на год',
 }) };
 
 const newsMock = async url => ({
@@ -37,6 +62,7 @@ const newsMock = async url => ({
 after(() => {
   if (hadOrig) { fs.copyFileSync(TMP, REG); fs.unlinkSync(TMP); }
   else fs.unlinkSync(REG);
+  if (fs.existsSync(OVR)) fs.unlinkSync(OVR);
 });
 
 test('generate: создаёт запись с тремя условиями и тезисом', async () => {
@@ -48,12 +74,49 @@ test('generate: создаёт запись с тремя условиями и 
     assert.strictEqual(rec.status, 'active');
     assert.strictEqual(rec.conditions.length, 3);
     assert.ok(rec.conditions.every(c => c.text && c.text.length > 10), 'условия содержательные');
+    // агент обновил мета: уровни + until + note, со снимком «было»
+    assert.ok(rec.agentMeta && Array.isArray(rec.agentMeta.lv));
+    const o = overrides.get('CEG');
+    assert.deepEqual(o.lv, [null, 220, 195]);
+    assert.strictEqual(o.until.event, 'Q3 отчёт');
+    assert.strictEqual(o.note, 'контракты подтверждаются');
+    assert.deepEqual(o._was.lv, [null, 230, 205], 'снимок «было» — hardcoded-дефолт CEG');
     const reg = getRegistry();
     assert.strictEqual(reg.length, 1);
     // повторная генерация заменяет, не дублирует
     await generate('CEG', { llm: llmGen });
     assert.strictEqual(getRegistry().length, 1);
   } finally { globalThis.fetch = realFetch; }
+});
+
+test('generate: структурно невалидные уровни не пишутся', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = newsMock;
+  try {
+    await generate('MOS', { llm: llmGenBadLv });
+    assert.strictEqual(overrides.get('MOS'), null, 'нечего писать — оверрайда нет вообще');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('generate: watch-тикер получает дефолт из WATCH, пустословный note отброшен', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = newsMock;
+  try {
+    await generate('ISRG', { llm: llmGenBadLv });
+    // валидного ничего нет: levels мусор, until пуст, note «информации недостаточно» — блок-лист
+    assert.strictEqual(overrides.get('ISRG'), null);
+    // а при валидном ответе «было» снимается с watch-дефолта
+    await generate('ISRG', { llm: llmGen });
+    const o = overrides.get('ISRG');
+    assert.deepEqual(o._was.lv, [470, 450, 430], 'was — hardcoded WATCH-уровни ISRG');
+    assert.strictEqual(o._was.note, 'не-AI диверсификатор, зона $430–470');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('reset: убирает оверрайд, реестр не трогает', () => {
+  assert.strictEqual(reset('CEG'), true);
+  assert.strictEqual(overrides.get('CEG'), null);
+  assert.strictEqual(getRegistry().some(r => r.t === 'CEG'), true, 'запись реестра осталась');
 });
 
 test('check: вердикты по условиям, триггер меняет статус, история чеков копится', async () => {
@@ -71,6 +134,8 @@ test('check: вердикты по условиям, триггер меняет
     const rec2 = await check('CEG', { llm: llmCheck });
     assert.strictEqual(rec2.checks.length, 2);
     assert.strictEqual(rec2.status, 'triggered');
+    // чек тоже ревизует мета: until обновился
+    assert.strictEqual(overrides.get('CEG').until.event, 'Q4 отчёт');
   } finally { globalThis.fetch = realFetch; }
 });
 

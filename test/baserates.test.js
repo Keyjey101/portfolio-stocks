@@ -3,17 +3,25 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { parseSp500, extractEvents, aggregate } = require('../src/lab/baserates');
 
-const WIKI_FIXTURE = `<table class="wikitable sortable" id="constituents">
-<tr><th>Symbol</th><th>Security</th></tr>
-<tr><td><a href="/wiki/Apple_Inc." title="Apple Inc.">AAPL</a></td><td>Apple Inc.</td></tr>
-<tr><td><a rel="nofollow" class="external text" href="x">BRK.B</a></td><td>Berkshire Hathaway</td></tr>
+const WIKI_FIXTURE = `<table class="wikitable sortable mw-collapsible sticky-header" id="constituents"><tbody id="mwIA">
+<tr id="mwIQ"><th id="mwIg"><a rel="mw:WikiLink" href="/wiki/Symbol">Symbol</a></th><th>Security</th></tr>
+<tr id="mwLQ"><td><a href="/wiki/Apple_Inc." title="Apple Inc.">AAPL</a></td><td>Apple Inc.</td></tr>
+<tr id="mwOQ"><td><a rel="nofollow" class="external text" href="x">BRK.B</a></td><td>Berkshire Hathaway</td></tr>
 <tr><td><a href="/wiki/Microsoft" title="Microsoft">MSFT</a></td><td>Microsoft</td></tr>
-</table>`;
+</tbody></table>`;
 
 test('parseSp500: тикеры из таблицы constituents, точки сохраняются', () => {
   const t = parseSp500(WIKI_FIXTURE);
   assert.deepEqual(t, ['AAPL', 'BRK.B', 'MSFT']);
   assert.deepEqual(parseSp500('<html>мусор</html>'), []);
+});
+
+test('parseSp500: строки и ячейки с id-атрибутами (разметка MediaWiki 2026) распознаются', () => {
+  const real = `<table class="wikitable sortable mw-collapsible sticky-header" id="constituents">
+<tr id="mwIQ"><th id="mwIg"><a rel="mw:WikiLink" href="x">Symbol</a></th></tr>
+<tr id="mwLQ"><td id="mwLg"><a href="x">NVDA</a></td></tr>
+</table>`;
+  assert.deepEqual(parseSp500(real), ['NVDA']);
 });
 
 // синтетика: рост 100→200, потом обвал к 110 (−45% от максимума), затем восстановление к 160

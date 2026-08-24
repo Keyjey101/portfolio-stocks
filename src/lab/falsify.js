@@ -3,9 +3,12 @@
 // ежеквартально по отчётам и новостям. Триггер → позиция помечается.
 const fs = require('fs');
 const path = require('path');
-const { META } = require('../portfolio');
+const { META, WATCH } = require('../portfolio');
+const overrides = require('../overrides');
 const { fetchHeadlines } = require('../news');
+const { PROMPTS } = require('../prompts');
 const { edgarRecent } = require('../edgar');
+const { chart } = require('../yahoo');
 const defaultLlm = require('../llm');
 
 const REG_FILE = path.join(__dirname, '..', '..', 'data', 'falsifications.json');
@@ -25,34 +28,67 @@ function saveRegistry(reg) {
 const GEN_SCHEMA = {
   thesis: 'string',
   conditions: 'array',
+  levels: 'array',
+  until_event: 'string',
+  until_check: 'string',
 };
 
-const CHECK_SCHEMA = { verdicts: 'array' };
+const CHECK_SCHEMA = {
+  verdicts: 'array',
+  levels: 'array',
+  until_event: 'string',
+  until_check: 'string',
+};
+
+// текущая цена тикера (для контекста и границ уровней)
+async function currentPx(T) {
+  const d = await chart(T).catch(() => null);
+  if (!d) return null;
+  return d.price ?? (d.closes?.length ? d.closes.at(-1) : null);
+}
+
+// дефолт меты тикера: позиция из META или watch-строка (для ватчлиста тоже)
+function defaultMeta(T) {
+  if (META[T]) return META[T];
+  const w = WATCH.find(x => x.t === T);
+  return w ? { tag: 'watch', lv: w.lv ?? null, note: w.note || '' } : {};
+}
+
+// из ответа LLM — патч меты (только whitelist, всё невалидное отбрасывается)
+const JUNK_NOTE = /(отсутств|нет данных|недостаточн|не предоставл|не удалось|no info|no data|cannot)/i;
+function agentMetaPatch(v, px) {
+  const patch = {};
+  const lv = overrides.validLv(v.levels, px);
+  if (lv) patch.lv = lv;
+  const until = overrides.validUntil(v.until_event, v.until_check);
+  if (until) patch.until = until;
+  const note = typeof v.note === 'string' ? v.note.trim() : '';
+  if (note.length > 3 && note.length <= 200 && !JUNK_NOTE.test(note)) patch.note = note;
+  return patch;
+}
+
+// применяет патч как оверрайд, снимая «было» с эффективной меты
+function saveAgentMeta(T, meta, v, px, task) {
+  const patch = agentMetaPatch(v, px);
+  if (!Object.keys(patch).length) return null;
+  const was = { lv: meta.lv ?? null, until: meta.until ?? null, note: meta.note ?? '' };
+  const saved = overrides.set(T, { ...patch, _was: was }, task);
+  return { ...patch, at: saved._at };
+}
 
 // сгенерировать/перегенерировать фальсификации для тикера
 async function generate(t, { llm = defaultLlm } = {}) {
   const T = String(t || '').toUpperCase().trim();
   if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(T)) throw new Error('введи тикер латиницей, например TSM');
-  const meta = META[T] || {};
-  const [news, filings] = await Promise.all([
+  const meta = overrides.merged(T, defaultMeta(T));
+  const [news, filings, px] = await Promise.all([
     fetchHeadlines(T).catch(() => []),
     edgarRecent(T).catch(() => []),
+    currentPx(T),
   ]);
-  const prompt = [
-    `Тикер: ${T}. Бакет портфеля: ${meta.tag || '—'}. Заметка владельца: «${meta.note || '—'}».`,
-    `Уровни докупа: ${JSON.stringify(meta.lv || null)}.`,
-    news.length ? 'Контекст новостей:' + news.slice(0, 6).map(n => '\n- ' + n.title).join('') : '',
-    filings.length ? 'Филлинги: ' + filings.slice(0, 4).map(f => `${f.form} от ${f.date}`).join(', ') : '',
-    '',
-    'Сформулируй тезис владельца одним предложением и ровно ТРИ условия фальсификации:',
-    'каждое — конкретное, измеримое по публичным данным (отчёты/новости), без оценочных слов;',
-    'наступление любого условия означает, что тезис мёртв, и позицию надо закрывать или пересматривать.',
-    'Верни ТОЛЬКО JSON: {"thesis":"…","conditions":[{"text":"…"},{"text":"…"},{"text":"…"}]}',
-  ].filter(Boolean).join('\n');
-
   const v = await llm.chat(
-    [{ role: 'system', content: 'Ты аналитик, применяющий принцип фальсифицируемости Поппера к инвесттезисам. Отвечай только JSON.' },
-     { role: 'user', content: prompt }],
+    [{ role: 'system', content: PROMPTS.falsifyGenerate.system },
+     { role: 'user', content: PROMPTS.falsifyGenerate.user({ T, meta, px, news, filings }) }],
     { schema: GEN_SCHEMA, task: 'falsify-generate', t: T, temperature: 0.3 },
   );
 
@@ -62,12 +98,14 @@ async function generate(t, { llm = defaultLlm } = {}) {
     .slice(0, 3);
   if (conds.length < 3) throw new Error(`${T}: сгенерировано ${conds.length} условий вместо 3`);
 
+  const agentMeta = saveAgentMeta(T, meta, v, px, 'falsify-generate');
   const reg = getRegistry().filter(r => r.t !== T);
   const rec = {
     t: T, thesis: v.thesis, conditions: conds,
     createdAt: new Date().toISOString(), status: 'active',
     checks: [],
   };
+  if (agentMeta) rec.agentMeta = agentMeta;
   reg.push(rec);
   saveRegistry(reg);
   return rec;
@@ -83,25 +121,15 @@ async function check(t, { llm = defaultLlm } = {}) {
   const rec = reg[idx];
   if (!rec.conditions?.length) throw new Error(`${T}: пустой список условий`);
 
-  const [news, filings] = await Promise.all([
+  const [news, filings, px] = await Promise.all([
     fetchHeadlines(T).catch(() => []),
     edgarRecent(T).catch(() => []),
+    currentPx(T),
   ]);
-  const prompt = [
-    `Тикер: ${T}. Тезис: «${rec.thesis}».`,
-    'Условия фальсификации:',
-    ...rec.conditions.map((c, i) => `${i}. ${c.text}`),
-    news.length ? 'Заголовки (последние):' + news.slice(0, 10).map(n => '\n- ' + n.title).join('') : 'Новостей нет.',
-    filings.length ? 'Филлинги: ' + filings.slice(0, 5).map(f => `${f.form} от ${f.date}: ${f.url}`).join('\n') : 'Филлингов нет.',
-    '',
-    'По каждому условию вынеси вердикт на основе ПРИВЕДЁННЫХ данных (не выдумывай факты):',
-    'triggered=true только если есть прямое свидетельство; иначе false с кратким evidence (что известно).',
-    'Верни ТОЛЬКО JSON: {"verdicts":[{"i":0,"triggered":false,"evidence":"…"},…]} — по всем условиям.',
-  ].join('\n');
-
+  const meta = overrides.merged(T, defaultMeta(T));
   const v = await llm.chat(
-    [{ role: 'system', content: 'Ты аудитор инвесттезисов. Работаешь строго по предоставленным данным, не галлюцинируешь факты. Отвечай только JSON.' },
-     { role: 'user', content: prompt }],
+    [{ role: 'system', content: PROMPTS.falsifyCheck.system },
+     { role: 'user', content: PROMPTS.falsifyCheck.user({ T, thesis: rec.thesis, meta, px, conditions: rec.conditions, news, filings }) }],
     { schema: CHECK_SCHEMA, task: 'falsify-check', t: T, temperature: 0.1 },
   );
 
@@ -113,9 +141,18 @@ async function check(t, { llm = defaultLlm } = {}) {
     rec.status = 'triggered';
     rec.triggeredAt = new Date().toISOString();
   }
+  const agentMeta = saveAgentMeta(T, meta, v, px, 'falsify-check');
+  if (agentMeta) rec.agentMeta = agentMeta;
   reg[idx] = rec;
   saveRegistry(reg);
   return rec;
+}
+
+// вернуть hardcoded-дефолт: убрать оверрайд агента
+function reset(t) {
+  const T = String(t || '').toUpperCase().trim();
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(T)) throw new Error('некорректный тикер');
+  return overrides.clear(T);
 }
 
 // ежеквартальный обход активных записей (cooldown 89 дней на запись)
@@ -131,4 +168,4 @@ async function checkAll({ llm = defaultLlm, cooldownDays = 89 } = {}) {
   return out;
 }
 
-module.exports = { getRegistry, saveRegistry, generate, check, checkAll };
+module.exports = { getRegistry, saveRegistry, generate, check, checkAll, reset };
