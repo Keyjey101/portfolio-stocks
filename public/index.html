@@ -71,7 +71,14 @@
     <aside class="vbox bez spot reveal" id="verdictBox" style="--d:120ms"><div class="core" id="verdict"></div></aside>
   </section>
 
-  <section class="rules reveal" id="rulesSec" style="--d:170ms">
+  <section class="rules reveal" id="mandateSec" style="--d:160ms">
+    <div class="bez spot"><div class="core">
+      <div class="ph">Мандат · потолки и состояние книги</div>
+      <div id="mandateBody">считаем ограничения…</div>
+    </div></div>
+  </section>
+
+  <section class="rules reveal hide" id="rulesSec" style="--d:170ms">
     <div class="bez spot"><div class="core">
       <div class="ph">Правила портфеля</div>
       <div id="rulesBody"></div>
@@ -80,7 +87,7 @@
 
   <section class="cal reveal hide" id="calSec" style="--d:190ms">
     <div class="bez spot"><div class="core">
-      <div class="ph">Календарь отчётов · 30 дней</div>
+      <div class="ph">Календарь отчётов · 60 дней</div>
       <div class="calbody" id="calBody">загружаем календарь…</div>
     </div></div>
   </section>
@@ -160,6 +167,7 @@
       <label>Тип<select id="decType">
         <option value="buy">покупка</option><option value="sell">продажа</option>
         <option value="skip">решил не покупать</option><option value="ignore_advice">проигнорировал совет</option>
+        <option value="contribution">довнесение ($ в кол-ве)</option>
       </select></label>
       <label>Тикер<input id="decT" maxlength="8" placeholder="TSM"></label>
       <label>Кол-во<input id="decQty" type="number" min="0" step="1"></label>

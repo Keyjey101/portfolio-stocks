@@ -50,8 +50,8 @@ test('runCommittee: 4 роли × 5 прогнозов, валидные соб�
       { kind: 'price_above', t: 'BAD', ref: 1, x: 99, horizon_days: 5, prob: 0.9, rationale: 'мусор' }, // будет отфильтрован
     ],
   }) };
-  const res = await C.runCommittee({ llm, contextLoader: async () => ({ total: 17000, roles: 4 }) });
-  assert.strictEqual(res.appended, 20, '4 роли × 5 валидных');
+  const res = await C.runCommittee({ llm, contextLoader: async () => ({ total: 17000, roles: 4 }), volLoader: async () => ({}) });
+  assert.strictEqual(res.appended, 20, '4 роли × 5 валидных (σ недоступна — информативность решится при оценке)');
   const lines = fs.readFileSync(PRED, 'utf8').split('\n').filter(Boolean);
   assert.strictEqual(lines.length, 20);
   const rec = JSON.parse(lines[0]);
@@ -60,7 +60,52 @@ test('runCommittee: 4 роли × 5 прогнозов, валидные соб�
   assert.ok(rec.outcome == null, 'исход ещё не известен');
 });
 
-test('scoreMatured + brierByRole + softmax-консенсус', async () => {
+test('runCommittee: набор без короткого горизонта отклоняется; неинформативные режутся на входе', async () => {
+  fs.writeFileSync(PRED, '');
+  const longOnly = { chat: async () => ({ predictions: [
+    { kind: 'price_above', t: 'TSM', ref: 100, x: 0.1, horizon_days: 200, prob: 0.7, rationale: '' },
+    { kind: 'price_above', t: 'NOW', ref: 130, x: 0.1, horizon_days: 180, prob: 0.6, rationale: '' },
+    { kind: 'index_above', ref: 5500, x: 0.05, horizon_days: 120, prob: 0.65, rationale: '' },
+  ] }) };
+  const res1 = await C.runCommittee({ llm: longOnly, contextLoader: async () => ({}), volLoader: async () => ({}) });
+  assert.strictEqual(res1.appended, 0, 'набор целиком отклонён');
+  assert.ok(res1.rejected.length === 4 && res1.rejected[0].reason.includes('горизонтом'));
+
+  // prob ≈ baseline → прогноз неинформативен, на входе отбрасывается.
+  // σ=0.012, x=2%, 30д → baseline ≈ 1−Φ(0.301) ≈ 0.38:
+  // prob 0.40 (|Δ|=0.02 < 0.10) режется, 0.90 (|Δ|=0.52) остаётся
+  const near = { chat: async () => ({ predictions: [
+    { kind: 'price_above', t: 'TSM', ref: 100, x: 0.02, horizon_days: 30, prob: 0.40, rationale: '' },
+    { kind: 'price_above', t: 'NOW', ref: 130, x: 0.02, horizon_days: 30, prob: 0.90, rationale: '' },
+  ] }) };
+  const res2 = await C.runCommittee({ llm: near, contextLoader: async () => ({}), volLoader: async () => ({ TSM: 0.012, NOW: 0.012 }) });
+  assert.strictEqual(res2.dropped.length, 4, 'по одному неинформативному на роль');
+  assert.strictEqual(res2.appended, 4, 'информативные остались');
+  assert.ok(res2.dropped.every(d => d.prob === 0.40));
+  const kept = fs.readFileSync(PRED, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+  assert.ok(kept.every(r => r.prob === 0.90));
+});
+
+test('baselineProb + sigmaBefore: случайное блуждание как честный нуль-гипотезный прогноз', () => {
+  // σ→0: движение практически невозможно → выше порога почти наверняка нет
+  const hi = C.baselineProb({ kind: 'price_above', t: 'X', ref: 100, x: 0.1, horizon_days: 30 }, 1e-9);
+  assert.ok(hi < 0.01);
+  const lo = C.baselineProb({ kind: 'price_below', t: 'X', ref: 100, x: 0.1, horizon_days: 30 }, 1e-9);
+  assert.ok(lo < 0.01, 'ниже тоже нет');
+  // σ большая: примерно монетка
+  const mid = C.baselineProb({ kind: 'price_above', t: 'X', ref: 100, x: 0.1, horizon_days: 30 }, 0.5);
+  assert.ok(Math.abs(mid - 0.5) < 0.05, 'симметрично вокруг 0.5: ' + mid);
+  assert.strictEqual(C.baselineProb({ kind: 'vix_above', level: 20, horizon_days: 30 }, 0.02), null, 'VIX без уровня на момент ts');
+  // σ считается по точкам ДО ts (нужно ≥21 точки до cut)
+  const closes = Array.from({ length: 30 }, (_, i) => 100 * (1 + 0.01 * Math.sin(i)));
+  const ts = closes.map((_, i) => (i + 20) * 86400); // ts в секундах
+  const cut = (24 + 20) * 86400 * 1000; // обрезаем после 25-й точки
+  const s = C.sigmaBefore(cut, { closes, ts });
+  assert.ok(s > 0 && s < 0.05, 'σ по окну до cut: ' + s);
+  assert.strictEqual(C.sigmaBefore(0, { closes, ts }), null, 'пустое окно — null');
+});
+
+test('scoreMatured + brierByRole + BSS + консенсус', async () => {
   // подкладываем созревшие прогнозы с известными исходами
   const now = Date.now();
   const rows = [
@@ -71,7 +116,7 @@ test('scoreMatured + brierByRole + softmax-консенсус', async () => {
   ];
   fs.writeFileSync(PRED, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
 
-  const scored = await C.scoreMatured({ priceLoader: async syms => ({ TSM: 110, NOW: 125, '^GSPC': 5000, '^VIX': 18 }) });
+  const scored = await C.scoreMatured({ priceLoader: async syms => ({ TSM: 110, NOW: 125, '^GSPC': 5000, '^VIX': 18 }), historyLoader: async () => ({}) });
   assert.strictEqual(scored, 3, 'незрелый vix_above не тронут');
   const lines = fs.readFileSync(PRED, 'utf8').split('\n').filter(Boolean);
   assert.strictEqual(lines.filter(l => JSON.parse(l).outcome == null).length, 1);
@@ -82,11 +127,33 @@ test('scoreMatured + brierByRole + softmax-консенсус', async () => {
   assert.ok(Math.abs(brier.bear - 0.49) < 1e-9);
 
   const w = C.consensusWeights();
-  assert.ok(Math.abs(w.bull + w.bear - 1) < 1e-9, 'softmax нормирован');
-  assert.ok(w.bull > w.bear, 'лучшая калибровка — больший вес');
+  const weights = w.weights || {};
+  assert.ok(Math.abs(weights.bull + weights.bear - 1) < 1e-9, 'softmax нормирован (фолбэк на Brier, истории BSS нет)');
+  assert.ok(weights.bull > weights.bear, 'лучшая калибровка — больший вес');
 
   const cal = C.calibration();
   assert.ok(Array.isArray(cal) && cal.length === 5);
   assert.ok(cal.every(b => b.n >= 0));
   assert.ok(cal.filter(b => b.n > 0).every(b => b.hitRate != null), 'непустые бакеты имеют частоту');
+});
+
+test('bssByRole: информативные прогнозы против baseline; хуже монетки — ниже нуля', () => {
+  const now = Date.now();
+  const mk = (role, prob, baseline, outcome, informative = true) => ({
+    ts: new Date(now - 40 * 864e5).toISOString(), role,
+    event: { kind: 'price_above', t: 'TSM', ref: 100, x: 0.1, horizon_days: 30 },
+    prob, baseline, outcome, informative,
+  });
+  fs.writeFileSync(PRED, [
+    // bull информативен и точен: BS 0.01 против baseline BS 0.16 → BSS = +0.94
+    JSON.stringify(mk('bull', 0.9, 0.6, true)),
+    // bear информативен, но хуже baseline: BS 0.81 против 0.01 → BSS = −80
+    JSON.stringify(mk('bear', 0.1, 0.9, true)),
+    // неинформативный — не считается вовсе
+    JSON.stringify(mk('bear', 0.5, 0.5, false, false)),
+  ].join('\n') + '\n');
+  const bss = C.bssByRole();
+  assert.ok(Math.abs(bss.bull.bss - (1 - 0.01 / 0.16)) < 1e-9, 'bull BSS: ' + bss.bull.bss);
+  assert.ok(bss.bear.bss < 0, 'хуже монетки — ниже нуля');
+  assert.strictEqual(bss.bear.n, 1, 'неинформативный не вошёл');
 });

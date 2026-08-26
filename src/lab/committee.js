@@ -1,6 +1,11 @@
 // #10 комитет агентов с калибровкой: бык/медведь/адвокат дьявола/базовые ставки.
 // Каждое утверждение — вероятностный прогноз машинно-разрешимой грамматики;
 // созревшие прогнозы разрешаются ценами → Brier по ролям → веса консенсуса.
+// #М7: скоринг ОТНОСИТЕЛЬНО baseline (случайное блуждание при текущей σ),
+// а не абсолютный: Brier мерил смещение персоны, а не навык. Метрика —
+// Brier Skill Score: 1 − BS_agent/BS_baseline; ниже нуля = хуже монетки.
+// Неинформативные прогнозы (|prob − baseline| < 0.10) не засчитываются;
+// набор роли обязан содержать ≥1 горизонт ≤30 дней, иначе отклоняется.
 const fs = require('fs');
 const path = require('path');
 const defaultLlm = require('../llm');
@@ -9,6 +14,10 @@ const { readCache } = require('../cache');
 const { getCalendar } = require('../signals');
 const { getData } = require('../signals');
 const { chart, pool } = require('../yahoo');
+const { normCdf } = require('../math/stats');
+
+const INFORMATIVE_EDGE = 0.10; // |prob − baseline| меньше — прогноз не засчитывается
+const MIN_SHORT_H = 30;        // в наборе роли нужен горизонт ≤ этого
 
 const PRED_FILE = path.join(__dirname, '..', '..', 'data', 'predictions.jsonl');
 
@@ -82,6 +91,38 @@ function resolveEvent(e, px) {
   }
 }
 
+// ── #М7 baseline: вероятность из случайного блуждания при текущей σ ──
+// drift 0 (честный прокси «без мнения»), σ — дневная, оценка на момент
+// прогноза. VIX-события без уровня на момент ts — baseline неизвестен.
+function baselineProb(e, sigDaily) {
+  if (!e || !(sigDaily > 0)) return null;
+  const s = sigDaily * Math.sqrt(e.horizon_days);
+  switch (e.kind) {
+    case 'price_above': case 'index_above':
+      return 1 - normCdf(Math.log(1 + e.x) / s);
+    case 'price_below': case 'index_below':
+      return normCdf(Math.log(1 - e.x) / s);
+    default:
+      return null;
+  }
+}
+
+// σ дневная по ряду до момента ts (последние ≤252 доходности до ts)
+function sigmaBefore(tsMs, { closes = [], ts = [] } = {}) {
+  let end = -1;
+  for (let i = 0; i < ts.length; i++) if ((ts[i] ?? 0) * 1000 <= tsMs) end = i;
+  if (end < 21) return null;
+  const win = closes.slice(Math.max(0, end - 252), end + 1);
+  const rets = win.slice(1).map((v, i) => Math.log(v / win[i]));
+  const m = rets.reduce((s, v) => s + v, 0) / rets.length;
+  return Math.sqrt(rets.reduce((s, v) => s + (v - m) ** 2, 0) / (rets.length - 1));
+}
+
+// событие → символ, по которому считается σ
+const sigmaSymbolOf = e =>
+  String(e.kind).startsWith('price_') ? e.t
+    : String(e.kind).startsWith('index_') ? '^GSPC' : null;
+
 // ── контекст и созыв комитета ──
 async function defaultContextLoader() {
   const D = await getData();
@@ -94,12 +135,19 @@ async function defaultContextLoader() {
       .map(([f, b]) => `${f}: ${b.toFixed(2)}`)
     : [];
   const tickers = D.rows.filter(r => r.ok).slice(0, 25).map(r => r.t);
+  let thesisStates = [];
+  try {
+    thesisStates = Object.values(require('./theses').listAll())
+      .filter(th => th.state !== 'intact')
+      .map(th => `${th.t}:${th.state}`);
+  } catch {}
   return {
     total: Math.round(D.total),
     verdict: D.verdict.t,
     rules: D.rules,
     topFactors,
     detectorFlags: (detector?.verdicts || []).map(v => `${v.t} ${v.verdict}`),
+    thesisStates,
     earnings: earnings.map(e => `${e.t} через ${e.days} дн`),
     tickers,
     spx: D.spxPx, vix: D.vixV,
@@ -110,9 +158,24 @@ function rolePrompt(role, ctx) {
   return PROMPTS.committee.user({ role, ctx });
 }
 
-async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLoader } = {}) {
+// загрузчик σ для проверки информативности на входе (6 мес истории)
+async function defaultVolLoader(symbols) {
+  const out = {};
+  await pool([...new Set(symbols)], async s => {
+    const d = await chart(s, '6mo').catch(() => null);
+    if (d?.closes?.length > 21) {
+      const rets = d.closes.slice(1).map((v, i) => Math.log(v / d.closes[i]));
+      const m = rets.reduce((s2, v) => s2 + v, 0) / rets.length;
+      out[s] = Math.sqrt(rets.reduce((s2, v) => s2 + (v - m) ** 2, 0) / (rets.length - 1));
+    }
+  });
+  return out;
+}
+
+async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLoader, volLoader = defaultVolLoader } = {}) {
   const ctx = await contextLoader();
   const rows = [];
+  const rejected = [];
   for (const role of ROLES) {
     if (rows.length) await new Promise(r => setTimeout(r, 3000)); // бережём rate-limit
     const v = await llm.chat(
@@ -120,22 +183,45 @@ async function runCommittee({ llm = defaultLlm, contextLoader = defaultContextLo
        { role: 'user', content: rolePrompt(role.id, ctx) }],
       { schema: { predictions: 'array' }, task: 'committee', t: role.id, temperature: 0.4 },
     ).catch(() => ({ predictions: [] }));
-    let kept = 0;
+    const batch = [];
     for (const p of v.predictions || []) {
-      if (kept >= 5) break;
+      if (batch.length >= 5) break;
       const event = validateEvent(p);
       const prob = +p.prob;
       if (!event || !(prob >= 0.05 && prob <= 0.95)) continue;
-      rows.push({
+      batch.push({
         ts: new Date().toISOString(), role: role.id, event, prob,
         rationale: String(p.rationale || '').slice(0, 300),
       });
-      kept++;
     }
+    // #М7: без короткого горизонта набор отклоняется целиком — иначе первая
+    // оценка роли появится только через год
+    if (batch.length && !batch.some(r => r.event.horizon_days <= MIN_SHORT_H)) {
+      rejected.push({ role: role.id, reason: `нет прогноза с горизонтом ≤${MIN_SHORT_H} дн — набор отклонён` });
+      continue;
+    }
+    rows.push(...batch);
+  }
+
+  // #М7: неинформативные (|prob − baseline| < 0.10) не засчитываются.
+  // σ недоступна (сеть) — прогноз остаётся, информативность решится при оценке
+  const sigSyms = rows.map(r => sigmaSymbolOf(r.event)).filter(Boolean);
+  const vols = sigSyms.length ? await volLoader(sigSyms).catch(() => ({})) : {};
+  const keptRows = [];
+  const dropped = [];
+  for (const r of rows) {
+    const sym = sigmaSymbolOf(r.event);
+    const base = sym ? baselineProb(r.event, vols[sym]) : null;
+    if (base != null && Math.abs(r.prob - base) < INFORMATIVE_EDGE) {
+      dropped.push({ role: r.role, event: r.event, prob: r.prob, baseline: +base.toFixed(3), why: '|prob − baseline| < 0.10' });
+      continue;
+    }
+    if (base != null) { r.baseline = +base.toFixed(3); r.sigmaAt = vols[sym]; }
+    keptRows.push(r);
   }
   const existing = readPreds();
-  writePreds([...existing, ...rows]);
-  return { appended: rows.length, at: new Date().toISOString() };
+  writePreds([...existing, ...keptRows]);
+  return { appended: keptRows.length, dropped, rejected, at: new Date().toISOString() };
 }
 
 // ── скоринг созревших ──
@@ -148,7 +234,17 @@ async function defaultPriceLoader(symbols) {
   return out;
 }
 
-async function scoreMatured({ priceLoader = defaultPriceLoader } = {}) {
+// история для точного baseline при оценке (σ на момент прогноза)
+async function defaultHistoryLoader(symbols) {
+  const out = {};
+  await pool([...new Set(symbols)], async s => {
+    const d = await chart(s, '2y').catch(() => null);
+    if (d?.closes?.length > 60) out[s] = { closes: d.closes, ts: d.ts };
+  });
+  return out;
+}
+
+async function scoreMatured({ priceLoader = defaultPriceLoader, historyLoader = defaultHistoryLoader } = {}) {
   const rows = readPreds();
   const need = new Set();
   const now = Date.now();
@@ -161,23 +257,43 @@ async function scoreMatured({ priceLoader = defaultPriceLoader } = {}) {
     else need.add('^VIX');
   });
   const px = need.size ? await priceLoader([...need]) : {};
+  const sigNeed = new Set();
+  rows.forEach(r => {
+    if (r.outcome != null || r.baseline != null) return;
+    const due = Date.parse(r.ts) + r.event.horizon_days * 864e5;
+    if (now < due) return;
+    const sym = sigmaSymbolOf(r.event);
+    if (sym) sigNeed.add(sym);
+  });
+  const hist = sigNeed.size ? await historyLoader([...sigNeed]).catch(() => ({})) : {};
   let scored = 0;
   for (const r of rows) {
-    if (r.outcome != null) continue;
     const due = Date.parse(r.ts) + r.event.horizon_days * 864e5;
-    if (now < due) continue;
-    const o = resolveEvent(r.event, px);
-    if (o == null) continue;
-    r.outcome = o;
-    r.resolvedAt = new Date().toISOString();
-    scored++;
+    if (now >= due && r.outcome == null) {
+      const o = resolveEvent(r.event, px);
+      if (o == null) continue;
+      r.outcome = o;
+      r.resolvedAt = new Date().toISOString();
+      scored++;
+    }
+    // baseline досчитываем и для ранее оценённых строк, где его не было
+    if (r.outcome != null && r.baseline == null) {
+      const sym = sigmaSymbolOf(r.event);
+      const sig = sym ? sigmaBefore(Date.parse(r.ts), hist[sym] || {}) : null;
+      const base = baselineProb(r.event, sig);
+      if (base != null) r.baseline = +base.toFixed(3);
+    }
+    if (r.outcome != null && r.informative == null && r.baseline != null) {
+      r.informative = Math.abs(r.prob - r.baseline) >= INFORMATIVE_EDGE;
+    }
   }
   if (scored) writePreds(rows);
   return scored;
 }
 
+// абсолютный Brier (для справки; мера смещения, не навыка)
 function brierByRole() {
-  const rows = readPreds().filter(r => r.outcome != null);
+  const rows = readPreds().filter(r => r.outcome != null && r.informative !== false);
   const acc = {};
   for (const r of rows) {
     acc[r.role] = acc[r.role] || { s: 0, n: 0 };
@@ -189,14 +305,48 @@ function brierByRole() {
   return out;
 }
 
+// #М7: Brier Skill Score относительно baseline случайного блуждания.
+// Отрицательный = агент хуже монетки. Считается по информативным прогнозам.
+function bssByRole() {
+  const rows = readPreds().filter(r => r.outcome != null && r.informative === true && r.baseline != null);
+  const acc = {};
+  for (const r of rows) {
+    acc[r.role] = acc[r.role] || { bsA: 0, bsB: 0, n: 0 };
+    const o = r.outcome ? 1 : 0;
+    acc[r.role].bsA += (r.prob - o) ** 2;
+    acc[r.role].bsB += (r.baseline - o) ** 2;
+    acc[r.role].n++;
+  }
+  const out = {};
+  for (const [role, { bsA, bsB, n }] of Object.entries(acc)) {
+    out[role] = bsB > 0 ? { bss: 1 - bsA / bsB, n } : { bss: null, n };
+  }
+  return out;
+}
+
+// веса консенсуса = softmax(BSS); пересчитываются «оптом» каждые 20
+// разрешённых прогнозов (bucket), чтобы не дёргаться от каждого исхода.
+// Пока информативной истории нет — фолбэк на softmax(−Brier).
 function consensusWeights() {
-  const b = brierByRole();
-  const eligible = Object.entries(b).filter(([, v]) => v != null);
-  if (!eligible.length) return {};
-  // роли без истории не входят
-  const exp = Object.fromEntries(eligible.map(([r, v]) => [r, Math.exp(-v)]));
+  const bss = bssByRole();
+  const eligible = Object.entries(bss).filter(([, v]) => v.n >= 5 && v.bss != null);
+  if (!eligible.length) {
+    const b = brierByRole();
+    const e2 = Object.entries(b).filter(([, v]) => v != null);
+    if (!e2.length) return { basis: 'нет истории', weights: {} };
+    const exp = Object.fromEntries(e2.map(([r, v]) => [r, Math.exp(-v)]));
+    const z = Object.values(exp).reduce((s, v) => s + v, 0);
+    return { basis: 'brier (мало информативных прогнозов)', weights: Object.fromEntries(Object.entries(exp).map(([r, v]) => [r, v / z])) };
+  }
+  const exp = Object.fromEntries(eligible.map(([r, v]) => [r, Math.exp(v.bss)]));
   const z = Object.values(exp).reduce((s, v) => s + v, 0);
-  return Object.fromEntries(Object.entries(exp).map(([r, v]) => [r, v / z]));
+  const resolvedN = readPreds().filter(r => r.outcome != null && r.informative !== false).length;
+  return {
+    basis: 'softmax(BSS)',
+    bucket: Math.floor(resolvedN / 20),
+    nextRecalcAt: (Math.floor(resolvedN / 20) + 1) * 20,
+    weights: Object.fromEntries(Object.entries(exp).map(([r, v]) => [r, v / z])),
+  };
 }
 
 // калибровка: бакеты заявленной вероятности против частоты реализации
@@ -217,5 +367,6 @@ function calibration() {
 
 module.exports = {
   ROLES, validateEvent, resolveEvent,
-  runCommittee, scoreMatured, brierByRole, consensusWeights, calibration,
+  baselineProb, sigmaBefore, sigmaSymbolOf,
+  runCommittee, scoreMatured, brierByRole, bssByRole, consensusWeights, calibration,
 };

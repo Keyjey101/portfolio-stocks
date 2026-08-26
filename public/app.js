@@ -127,6 +127,7 @@ function boot(){
       startRing();
       fetchCalendar();
       fetchMacro();
+      fetchMandate();
     },420);
   }).catch(function(e){
     bootTimers.forEach(clearTimeout);stopFun();
@@ -164,6 +165,55 @@ function markEarnings(){
       if(tr)tr.classList.add('earn-soon');
     }
   });
+}
+
+/* ───────────── мандат: потолки и состояние книги (#М4) ───────────── */
+function fetchMandate(){
+  fetch('/api/lab/mandate',{cache:'no-store'}).then(function(r){return r.json()})
+    .then(function(D){
+      if(!D.ok||!D.panel)return; // фолбэк — старая панель правил из /api/data
+      renderMandate(D.panel);
+    }).catch(function(){});
+}
+function renderMandate(P){
+  var sec=$('#mandateSec');if(!sec)return;
+  sec.classList.remove('hide');
+  $('#rulesSec').classList.add('hide');
+  var g=P.aiTags||{},f=P.aiFactor,cash=P.cash||{},mx=P.maxName||{},br=P.broken||{},enb=P.enb||{};
+  var rows=[
+    {c:g.c,name:'AI-доля · по тегам',val:fmtPct(g.pct)+' / '+fmtPct(g.target),
+     txt:g.c==='r'?(g.excess!=null&&!P.guest?'превышение '+money(g.excess)+' — новые покупки AI запрещены':'превышение — покупки AI запрещены'):'в рамках',
+     tc:g.c==='r'?'dn':'up',
+     sub:'+ скрытая (индексы ×0,3): '+fmtPct(g.hiddenPct)},
+  ];
+  if(f&&f.beta!=null){
+    rows.push({c:(f.effShare!=null&&f.effShare>P.aiTags.target+1e-9)?'r':'g',
+      name:'AI-бета · по факторам',val:f.effShare!=null?fmtPct(f.effShare)+' / '+fmtPct(P.aiTags.target):'β '+n(f.beta,2),
+      txt:'орт-SMH β портфеля '+n(f.beta,2)+' · медиана ядра '+n(f.medBeta,2),
+      tc:'mut',
+      sub:P.aiDivergence?'расхождение с тегами: '+(P.aiDivergence.gapPct>=0?'+':'')+(P.aiDivergence.gapPct*100).toFixed(1)+' п.п. — само по себе информативно':null});
+  } else {
+    rows.push({c:'d',name:'AI-бета · по факторам',val:'нет данных',txt:'факторная модель не готова',tc:'mut'});
+  }
+  rows.push(
+    {c:cash.c,name:'Кэш-резерв',val:fmtPct(cash.pct)+' / '+fmtPct(cash.target),
+     txt:cash.short!=null&&cash.short>0?(!P.guest?'недобор '+money(cash.short):'недобор'):'цель достигнута',
+     tc:cash.short>0?'oc':'up'},
+    {c:mx.c,name:'Макс. имя',val:(mx.t||'—')+(mx.t?' '+fmtPct(mx.pct)+' / '+fmtPct(mx.target):''),
+     txt:mx.c==='r'?'превышен':'',tc:mx.c==='r'?'dn':'up'},
+    {c:br.c,name:'Сломанные тезисы',val:br.n?br.n+' поз. · '+fmtPct(br.pct)+(!P.guest&&br.val!=null?' ('+money(br.val)+')':''):'нет',
+     txt:br.n?(br.overdue&&br.overdue.length?'ПРОСРОЧЕН пересмотр: '+br.overdue.join(', '):'требуют решения'):'чисто',
+     tc:br.overdue&&br.overdue.length?'dn':(br.n?'oc':'up')},
+    {c:enb.c,name:'Эфф. число ставок',val:enb.value!=null?n(enb.value,1)+' / '+enb.n:'—',
+     txt:enb.share!=null?(enb.share*100).toFixed(0)+'% позиций независимы':'',tc:'mut'}
+  );
+  $('#mandateBody').innerHTML=rows.map(function(r){
+    return '<div class="rrow"><i class="led" style="--cc:'+COL[r.c]+'"></i>'
+      +'<span class="rname">'+r.name+'</span><span class="rval">'+r.val+'</span>'
+      +(r.txt?'<span class="rtxt '+r.tc+'">'+r.txt+'</span>':'')
+      +(r.sub?'<span class="rsub">'+r.sub+'</span>':'')
+      +'</div>';
+  }).join('');
 }
 
 /* ───────────── макро-фон FRED ───────────── */
@@ -542,6 +592,7 @@ function refresh(auto){
     fetching=false;btn.classList.remove('spin');startRing();
     fetchCalendar();
     fetchMacro();
+    fetchMandate();
   });
 }
 $('#btnRefresh').addEventListener('click',function(){refresh(false)});

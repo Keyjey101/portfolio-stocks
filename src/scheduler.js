@@ -33,10 +33,34 @@ function start() {
   const { runDetector } = require('./lab/detector');
   const committee = require('./lab/committee');
   const falsify = require('./lab/falsify');
+  const theses = require('./lab/theses');
+  const { runDueChains } = require('./lab/calendar');
+  const { runDerive, needsRederive } = require('./lab/derivation');
+  const { readCache } = require('./cache');
   const warmDaily = () => {
     runFactors().catch(e => console.error('scheduler: factors:', e.message));
     runLevels().catch(e => console.error('scheduler: levels:', e.message));
     runDetector().catch(e => console.error('scheduler: detector:', e.message));
+    // #М3: T+1 после отчёта — переоценка тезиса → переход → перевывод уровней
+    runDueChains({ calendarLoader: () => require('./signals').getCalendar() })
+      .then(r => { if (r.ran) console.log(`scheduler: earnings chain обработала ${r.ran} отчёт(ов)`); })
+      .catch(e => console.error('scheduler: earnings chain:', e.message));
+    // #М8: дневной снапшот NAV → TWR; #М2: перевывод при уходе цены >25%
+    Promise.resolve()
+      .then(() => {
+        const D = readCache('data', 2 * DAY);
+        if (D?.total > 0) require('./lab/journal').appendNav(D.total);
+        const pxOf = Object.fromEntries((D?.rows || []).filter(r => r.ok).map(r => [r.t, r.px]));
+        for (const rec of Object.values(theses.listAll())) {
+          if (!rec.levels?.px_at) continue;
+          const px = pxOf[rec.t];
+          if (px && needsRederive(rec, px)) {
+            runDerive(rec.t, { trigger: 'price±25%' })
+              .catch(e => console.error(`scheduler: rederive ${rec.t}:`, e.message));
+          }
+        }
+      })
+      .catch(() => {});
   };
   const warmWeekly = () => {
     runMC().catch(e => console.error('scheduler: mc:', e.message));
@@ -63,23 +87,44 @@ function start() {
       .catch(() => {});
   };
 
-  // #6 контрфактуалы + точность советов: еженедельно, кэш 6 ч
+  // #6/#М8 контрфактуалы (30/90/365 + ITOT), точность советов и уровней,
+  // TWR портфеля: еженедельно, кэш 6 ч
   const weeklyJournal = () => {
-    const { computeCounterfactuals, adviceAccuracy, listDecisions } = require('./lab/journal');
+    const journal = require('./lab/journal');
     const { chart } = require('./yahoo');
     const { WATCH } = require('./portfolio');
     const { writeCache } = require('./cache');
     const priceLoader = async (t, tradingDaysAgo) => {
-      const d = await chart(t, tradingDaysAgo > 200 ? '2y' : '1y').catch(() => null);
+      const d = await chart(t, tradingDaysAgo > 200 ? '3y' : '1y').catch(() => null);
       if (!d || !d.closes.length) return null;
       const i = d.closes.length - 1 - tradingDaysAgo;
       return i >= 0 ? d.closes[i] : d.closes[0];
     };
+    const seriesLoader = async t => {
+      const d = await chart(t, '1y').catch(() => null);
+      return d?.closes || null;
+    };
+    const decisions = journal.listDecisions();
     Promise.all([
-      computeCounterfactuals({ decisions: listDecisions(), priceLoader, watch: WATCH.map(w => w.t) }),
-      adviceAccuracy({ priceLoader }),
+      journal.computeCounterfactuals({ decisions, priceLoader, watch: WATCH.map(w => w.t) }),
+      journal.adviceAccuracy({ priceLoader }),
+      journal.levelsAccuracy({ seriesLoader }).catch(() => null),
+      // TWR портфеля против ITOT за период наблюдения NAV
+      (async () => {
+        const nav = journal.listNav();
+        if (nav.length < 2) return null;
+        const flows = journal.navFlowsFromDecisions(decisions);
+        const port = journal.twr(nav, flows);
+        const d = await chart('ITOT', '2y').catch(() => null);
+        if (!d?.closes?.length || !d?.ts?.length) return { portfolio: port, itot: null };
+        const from = nav[0].date, to = nav.at(-1).date;
+        const itotNav = d.ts
+          .map((t, i) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), total: d.closes[i] }))
+          .filter(p => p.date >= from && p.date <= to);
+        return { portfolio: port, itot: journal.twr(itotNav, []) };
+      })().catch(() => null),
     ])
-      .then(([items, advice]) => writeCache('counterfactuals', { items, advice, at: new Date().toISOString() }))
+      .then(([items, advice, levels, twrData]) => writeCache('counterfactuals', { items, advice, levels, twr: twrData, at: new Date().toISOString() }))
       .catch(e => console.error('scheduler: counterfactuals:', e.message));
   };
 

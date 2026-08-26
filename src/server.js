@@ -18,10 +18,18 @@ const committee = require('./lab/committee');
 const journal = require('./lab/journal');
 const baserates = require('./lab/baserates');
 const capcycle = require('./lab/capcycle');
+const theses = require('./lab/theses');
+const { runDerive } = require('./lab/derivation');
+const mandate = require('./lab/mandate');
+const { queueView } = require('./lab/calendar');
+const { runBuyCheck } = require('./lab/buycheck');
 const scheduler = require('./scheduler');
 const auth = require('./auth');
 const { createLimiter } = require('./ratelimit');
 const { getMacro } = require('./fred');
+const equity = require('./equity/orchestrator');
+const scanner = require('./equity/scanner');
+const { SECTORS } = require('./equity/universe');
 
 const PORT = +(process.env.PORT || 3000);
 const API_PORT = +(process.env.API_PORT || 0); // задан и ≠ PORT — поднимаем второй сервер под nginx /api/
@@ -62,6 +70,8 @@ function json(res, code, obj) {
 const clientIp = req => String(req.headers['x-real-ip'] || req.socket.remoteAddress || '?').replace(/^::ffff:/, '');
 
 const limiter = createLimiter();
+// тяжёлые эндпоинты оценки: 5 req/min (спека 1 §1.4)
+const eqLimiter = createLimiter();
 
 async function handle(req, res) {
   const url = decodeURIComponent(req.url.split('?')[0]);
@@ -75,6 +85,30 @@ async function handle(req, res) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(data);
     });
+    return;
+  }
+
+  // ── страницы оценки акций: только владелец (гостю — экран с паролем) ──
+  if (url === '/stock-analysis' || url === '/market-scanner') {
+    if (!auth.enabled() || owner) {
+      const file = url === '/stock-analysis' ? 'analysis.html' : 'scanner.html';
+      fs.readFile(path.join(PUB, file), (err, data) => {
+        if (err) { res.writeHead(404).end('not found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(data);
+      });
+    } else {
+      fs.readFile(path.join(PUB, 'gate.html'), (err, data) => {
+        if (err) { res.writeHead(500).end('gate error'); return; }
+        res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(data);
+      });
+    }
+    return;
+  }
+  // список секторов для фильтра сканера (страница отдаёт вместе с разметкой)
+  if (url === '/api/equity/sectors') {
+    json(res, 200, { ok: true, sectors: SECTORS });
     return;
   }
 
@@ -118,6 +152,91 @@ async function handle(req, res) {
       json(res, 401, { ok: false, guest: true, error: 'личный раздел — войди как владелец' });
       return;
     }
+  }
+
+  // ── оценка акций (docs/spec-replica): только владелец; тяжёлые — 5/мин ──
+  const eqDenied = (code, err) => json(res, code, { ok: false, error: err });
+  let m;
+  if ((m = url.match(/^\/api\/equity\/analyze\/([A-Za-z0-9.\-]+)\/stream$/))) {
+    if (!owner) { eqDenied(401, 'доступно владельцу — войди через 🔑'); return; }
+    const ip = clientIp(req);
+    if (!eqLimiter(ip + ':a', 5, 60e3)) { eqDenied(429, 'слишком часто — не чаще 5 анализов в минуту'); return; }
+    const ticker = m[1].toUpperCase();
+    const type = req.url.includes('type=dividend') ? 'dividend' : 'equity';
+    const force = /[?&]force=1|[?&]force=true/.test(req.url);
+    const started = equity.startAnalysis(ticker, { type, force });
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    const HOUR_S = 3600;
+    const nowS = Math.floor(Date.now() / 1000);
+    let lastWrite = Date.now();
+    const write = obj => {
+      try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); lastWrite = Date.now(); } catch { /* клиент отвалился — анализ жив */ }
+    };
+    // heartbeat: если строк не было 15 с — ': ka' каждую секунду (спека 1 §1.4)
+    const hb = setInterval(() => {
+      if (Date.now() - lastWrite > 15000) { try { res.write(': ka\n\n'); } catch {} }
+    }, 1000);
+    req.on('close', () => clearInterval(hb));
+    if (started.fromCache) {
+      const ageS = Math.floor((require('./cache').cacheAgeMs(started.cacheName) || 0) / 1000);
+      write({ step: 'result', status: 'done', data: started.result,
+        _cache: { hit: true, created_at: nowS - ageS, expires_at: nowS - ageS + HOUR_S } });
+      clearInterval(hb);
+      res.end();
+      return;
+    }
+    const run = started.run;
+    // безпотеряная подписка: sync() дочитывает кадры по индексу
+    let sent = 0;
+    const sync = () => { while (sent < run.frames.length) write(run.frames[sent++]); };
+    run.subs.add(sync);
+    sync();
+    run.promise.then(
+      () => { clearInterval(hb); try { res.end(); } catch {} },
+      () => { clearInterval(hb); try { res.end(); } catch {} },
+    );
+    req.on('close', () => { run.subs.delete(sync); clearInterval(hb); });
+    return;
+  }
+  if ((m = url.match(/^\/api\/equity\/analyze\/([A-Za-z0-9.\-]+)\/result$/))) {
+    // восстановление после обрыва (08 §8.1): только чтение кэша, MISS → 204
+    if (!owner) { eqDenied(401, 'доступно владельцу'); return; }
+    const type = req.url.includes('type=dividend') ? 'dividend' : 'equity';
+    const { data } = equity.cachedResult(m[1], type);
+    if (!data) { res.writeHead(204).end(); return; }
+    json(res, 200, { step: 'result', status: 'done', data });
+    return;
+  }
+  if (url === '/api/equity/scan' && req.method === 'POST') {
+    if (!owner) { eqDenied(401, 'доступно владельцу — войди через 🔑'); return; }
+    const ip = clientIp(req);
+    if (!eqLimiter(ip + ':s', 5, 60e3)) { eqDenied(429, 'слишком часто — не чаще 5 сканов в минуту'); return; }
+    try {
+      const b = await readBody(req);
+      const out = scanner.startScan({ ...b, force: !!b.force });
+      json(res, 202, { data: { scanId: out.scanId, scanType: out.params.scanType, estimatedSeconds: out.estimatedSeconds, cached: !!out.cached } });
+    } catch (e) { eqDenied(500, e.message); }
+    return;
+  }
+  if ((m = url.match(/^\/api\/equity\/scan\/([A-Za-z0-9_\-]+)\/status$/))) {
+    if (!owner) { eqDenied(401, 'доступно владельцу'); return; }
+    const st = scanner.getStatus(m[1]);
+    if (!st) { eqDenied(404, 'скан не найден'); return; }
+    json(res, 200, { data: st });
+    return;
+  }
+  if ((m = url.match(/^\/api\/equity\/scan\/([A-Za-z0-9_\-]+)\/results$/))) {
+    if (!owner) { eqDenied(401, 'доступно владельцу'); return; }
+    const r = scanner.getResults(m[1]);
+    if (!r) { eqDenied(404, 'скан не найден'); return; }
+    if (r.notReady) { eqDenied(400, 'скан ещё не завершён'); return; }
+    json(res, 200, { data: r });
+    return;
   }
 
   if (url === '/api/macro') {
@@ -211,6 +330,7 @@ async function handle(req, res) {
           ok: true,
           roles: committee.ROLES,
           brier: committee.brierByRole(),
+          bss: committee.bssByRole(),
           weights: committee.consensusWeights(),
           calibration: committee.calibration(),
           predictions: require('fs').readFileSync(path.join(__dirname, '..', 'data', 'predictions.jsonl'), 'utf8')
@@ -271,6 +391,51 @@ async function handle(req, res) {
         payload = { ok: true, data: baserates.getAggregates() };
       }
       json(res, 200, payload);
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url === '/api/lab/theses') {
+    // машина состояний тезиса (#М1) + очередь пересмотров (#М3):
+    // GET — чтение (гостям можно: денег в записях нет),
+    // POST — ручной переход/перевывод (владелец, LLM по триггеру)
+    try {
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        if (b.action === 'derive') {
+          const out = await runDerive(String(b.t || '').toUpperCase());
+          json(res, 200, { ok: true, derive: out, rec: theses.get(b.t) });
+        } else {
+          const r = await theses.applyManual(b.t, b.to, b.reason || '');
+          json(res, 200, { ok: true, ...r });
+        }
+      } else {
+        json(res, 200, {
+          ok: true,
+          items: theses.listAll(),
+          queue: await queueView({ calendarLoader: getCalendar }),
+        });
+      }
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url === '/api/lab/mandate') {
+    // движок ограничений мандата (#М4): первым экраном терминала;
+    // гостям — проценты без долларов
+    try {
+      const P = await mandate.runMandate();
+      json(res, 200, { ok: true, panel: owner ? P : mandate.sanitizePanel(P) });
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url === '/api/lab/buycheck') {
+    // «стоит ли покупать X» (#М5): владелец, LLM по ручному триггеру
+    try {
+      const b = await readBody(req);
+      const out = await runBuyCheck({ t: b.t, usd: b.usd });
+      json(res, 200, { ok: true, result: out });
     } catch (e) { json(res, 500, { ok: false, error: e.message }); }
     return;
   }
@@ -352,6 +517,7 @@ function start() {
     process.on('unhandledRejection', e => console.error('unhandled rejection (сервер жив):', e && e.message));
     const where = HOST === '127.0.0.1' ? 'localhost' : HOST;
     console.log(`\n  Терминал:  http://${where}:${PORT}  ·  лаборатория: http://${where}:${PORT}/lab`
+      + `\n  Оценка акций (владелец): /stock-analysis · сканер сектора: /market-scanner`
       + (auth.enabled() ? `\n  Вход: 🔑 в шапке (пароль APP_PASSWORD). Без входа — публичный режим без сумм и кнопок.` : `\n  APP_PASSWORD не задан — авторизация выключена (все — владелец).`)
       + (API_PORT && API_PORT !== PORT ? `\n  API-порт для nginx: ${API_PORT} (location /api/ → 127.0.0.1:${API_PORT}).` : '')
       + `\n  Автообновление раз в 90 сек. Ctrl+C для остановки.\n`);

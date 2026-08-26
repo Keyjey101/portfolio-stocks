@@ -47,30 +47,43 @@ function firesOf(sV, sT, sY) {
 }
 
 // ── Статус позиции: смысл действия, а не один красный значок ──
-// st в META: 'sell' (продать) | 'broken' (тезис повреждён) | 'fix' (фикс части)
-// Приоритет: sell → broken → fix → ★DCA → ⏸(until, B2) → ✓Tn → ждать → ⚪
-function statusOf(px, m = {}, now = new Date()) {
-  const od = m.reviewBy ? overdueDays(m.reviewBy, now) > 0 : false;
+// Приоритет: машина состояний тезиса (#М1) → st в META ('sell'|'broken'|'fix')
+// → ★DCA → ⏸(until) → ✓Tn → ждать → ⚪
+function statusOf(px, m = {}, now = new Date(), thesis = null) {
+  const reviewDue = thesis?.review?.due || m.reviewBy || null;
+  const od = reviewDue ? overdueDays(reviewDue, now) > 0 : false;
   const tipBits = [];
-  if (m.check) tipBits.push(m.check);
-  if (m.reviewBy) tipBits.push('пересмотр до ' + fmtRu(m.reviewBy));
+  if (thesis?.review?.reason) tipBits.push(thesis.review.reason);
+  else if (m.check) tipBits.push(m.check);
+  if (reviewDue) tipBits.push('пересмотр до ' + fmtRu(reviewDue));
   const tip = tipBits.join(' · ');
+  // машина состояний тезиса первична (#М1)
+  const st = thesis?.state || null;
+  if (st === 'dead')      return { s:'⛔ ТЕЗИС МЁРТВ — выход', c:'r', tip };
+  if (st === 'damaged')   return { s:'⛔ ТЕЗИС ПОВРЕЖДЁН', c:'r', od, tip };
+  if (st === 'watch')     return { s:'⚠ НАБЛЮДЕНИЕ', c:'y', od, tip };
+  if (st === 'recovering')return { s:'⏳ ВОССТАНОВЛЕНИЕ', c:'y', od, tip };
   if (m.st === 'sell')   return { s:'🔴 ПРОДАТЬ', c:'r', tip };
   // ⛔ + od: дата пересмотра прошла, а решения нет
   if (m.st === 'broken') return { s:'⛔ ТЕЗИС ПОВРЕЖДЁН', c:'r', od, tip };
   if (m.st === 'fix')    return { s:'🔵 ФИКС ЧАСТИ', c:'b', tip };
-  const lv = m.lv;
+  // уровни из записи тезиса первичны (#М2), META — дефолт
+  const thLv = thesis?.levels;
+  const lv = thLv && [thLv.t1, thLv.t2, thLv.t3].some(v => v != null)
+    ? [thLv.t1, thLv.t2, thLv.t3] : m.lv;
+  const until = thLv?.until || m.until || null;
   if (!lv) {
     // открытый вопрос (держать/чистить) с датой решения — ⏸, не серое «не добирать»
-    if (m.reviewBy) return { s:`⏸ ПЕРЕСМОТР до ${fmtRu(m.reviewBy)}`, c:'y', od, tip };
+    if (reviewDue) return { s:`⏸ ПЕРЕСМОТР до ${fmtRu(reviewDue)}`, c:'y', od, tip };
     return { s:'⚪ НЕ ДОБИРАТЬ', c:'d' };
   }
   const [t1, t2, t3] = lv;
   if (t1 === 999) return { s:'★ ЕЖЕМЕСЯЧНО', c:'g' };
   // достигнутый уровень (1|2|3) — до вывода зелёного
   const tier = t3 && px <= t3 ? 3 : t2 && px <= t2 ? 2 : t1 && px <= t1 ? 1 : 0;
-  // ⏸ уровень достигнут, но событие не снято
-  if (tier && m.until) return { s:`⏸ T${tier} ✓ — ждёт ${m.until.event}`, c:'y', tip: [m.until.check, tip].filter(Boolean).join(' · ') };
+  // ⏸ уровень достигнут, но подтверждения нет (обязательно для conditional,
+  // т.е. damaged/recovering — активация парой «цена + факт», не одной ценой)
+  if (tier && until) return { s:`⏸ T${tier} ✓ — ждёт ${until.event}`, c:'y', tip: [until.check, tip].filter(Boolean).join(' · ') };
   if (tier === 3) return { s:`✓✓✓ T3 ≤${t3}`, c:'g' };
   if (tier === 2) return { s:`✓✓ T2 ≤${t2}`, c:'g' };
   if (tier === 1) return { s:`✓ T1 ≤${t1}`, c:'g' };
@@ -146,6 +159,7 @@ async function build() {
   ];
 
   const list = await positions();
+  const thesesAll = require('./lab/theses').listAll();
   const rows = await pool(list.filter(p => p.qty > 0 || p.t === 'ITOT'), async p => {
     try {
       const d = await chart(p.t, '3mo');
@@ -153,7 +167,8 @@ async function build() {
       const val = px * p.qty;
       const pnl = p.avg > 0 ? (px / p.avg - 1) * 100 : null;
       const day = d.prevClose ? (px / d.prevClose - 1) * 100 : null;
-      return { ...p, px, val, pnl, day, lvl: statusOf(px, p), ok: true, sp: spark(d.closes) };
+      const thesis = thesesAll[p.t] || null;
+      return { ...p, px, val, pnl, day, thesis, lvl: statusOf(px, p, new Date(), thesis), ok: true, sp: spark(d.closes) };
     } catch (e) {
       return { ...p, ok: false, err: e.message };
     }

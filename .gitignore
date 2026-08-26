@@ -19,3 +19,8 @@ node_modules/
 .kilo/
 __pycache__/
 *.pyc
+data/theses.json
+data/reports-watch.json
+data/nav.jsonl
+data/scans/
+data/analysis-outcomes.jsonl

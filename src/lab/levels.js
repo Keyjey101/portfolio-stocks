@@ -38,6 +38,9 @@ function calibrateLevels(closes, lv, horizonYr = 1) {
 const { loadPrices, alignPrices } = require('./factors');
 const { positions: defaultPositions } = require('../portfolio');
 const { readCache, writeCache } = require('../cache');
+const thesesStore = require('./theses');
+const { suggestMergedGrid, suggestReplacement } = require('./derivation');
+const calendarLab = require('./calendar');
 
 let inflight = null;
 
@@ -48,18 +51,48 @@ async function runLevels({ force = false, positionsLoader = defaultPositions, ca
     if (inflight) return inflight;
   }
   inflight = (async () => {
+    // #М1/#М2: уровни из машины состояний первичны; META/оверрайды — дефолт.
+    // Позиция попадает в расчёт и когда уровни есть ТОЛЬКО в записи тезиса
+    const thesesAll = thesesStore.listAll();
+    const hasThesisLv = p => {
+      const l = thesesAll[p.t]?.levels;
+      return l && [l.t1, l.t2, l.t3].some(v => v != null);
+    };
     const list = (await positionsLoader())
-      .filter(p => Array.isArray(p.lv) && p.lv.some(v => v && v !== 999));
+      .filter(p => (Array.isArray(p.lv) && p.lv.some(v => v && v !== 999)) || hasThesisLv(p));
     const raw = await loadPrices(list.map(p => p.t), '2y');
     const aligned = alignPrices(raw);
+    const freeze = calendarLab.freezeMark(calendarLab.readWatch().items);
     const items = [];
     for (const p of list) {
       const closes = aligned[p.t];
       if (!closes || closes.length < 260) continue; // GARCH нужен хотя бы год
+      const th = thesesAll[p.t];
+      const thLv = th?.levels;
+      const lvEff = thLv && [thLv.t1, thLv.t2, thLv.t3].some(v => v != null)
+        ? [thLv.t1, thLv.t2, thLv.t3]
+        : p.lv;
+      const cal = calibrateLevels(closes, lvEff);
+      // предложения вместо флагов (#М2): склеенная сетка и замена фантазии
+      const suggest = {};
+      const mg = suggestMergedGrid(lvEff, cal.sigAnn * cal.px);
+      if (mg && cal.merge?.length) suggest.merge = mg;
+      if (cal.fantasy) {
+        const rep = suggestReplacement({ px: cal.px, level: lvEff[2], muAnn: cal.muAnn, sigAnn: cal.sigAnn, pTouch });
+        if (rep) suggest.fantasy = rep;
+      }
       items.push({
         t: p.t,
-        until: p.until || null,
-        ...calibrateLevels(closes, p.lv),
+        until: thLv?.until || p.until || null,
+        thesis: th ? {
+          state: th.state,
+          conditional: !!thLv?.conditional,
+          basis: thLv?.basis || null,
+          derived_at: thLv?.derived_at || null,
+        } : null,
+        frozen: freeze[p.t] ? { days: freeze[p.t].days } : null,
+        suggest: Object.keys(suggest).length ? suggest : null,
+        ...cal,
       });
     }
     const res = { generatedAt: new Date().toISOString(), items };

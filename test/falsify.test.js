@@ -11,9 +11,12 @@ const hadOrig = fs.existsSync(REG);
 if (hadOrig) fs.copyFileSync(REG, TMP);
 fs.writeFileSync(REG, '[]');
 
-// оверрайды меты — в отдельный файл (параллельные тест-файлы не делят состояние)
+// оверрайды меты и записи тезисов — в отдельные файлы (параллельные
+// тест-файлы не делят состояние; боевые data/*.json не трогаем)
 const OVR = path.join(__dirname, '..', 'data', 'cache', '.overrides-test-fal.json');
 process.env.OVERRIDES_FILE = OVR;
+process.env.THESES_FILE = path.join(__dirname, '..', 'data', 'cache', '.theses-test-fal.json');
+fs.rmSync(process.env.THESES_FILE, { force: true });
 
 const { generate, check, getRegistry, saveRegistry, reset } = require('../src/lab/falsify');
 const overrides = require('../src/overrides');

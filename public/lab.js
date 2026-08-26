@@ -24,8 +24,9 @@ function renderLevels(D){
   if(!D.items||!D.items.length){$('#levelsSub').textContent='нет позиций с уровнями';return}
   var nFant=D.items.filter(function(i){return i.fantasy}).length;
   var nMerge=D.items.filter(function(i){return i.merge&&i.merge.length}).length;
-  var head=nFant||nMerge
-    ?take((nFant?'<b>'+nFant+'</b> уровней-фантазий (не дождёшься — пересмотрь). ':'')+(nMerge?'у <b>'+nMerge+'</b> позиций уровни слиплись в один (спорить о $380 vs $370 — шум).':''),true)
+  var nFrz=D.items.filter(function(i){return i.frozen}).length;
+  var head=(nFant||nMerge||nFrz)
+    ?take((nFant?'<b>'+nFant+'</b> уровней-фантазий (не дождёшься — пересмотри). ':'')+(nMerge?'у <b>'+nMerge+'</b> позиций уровни слиплись в один (спорить о $380 vs $370 — шум). ':'')+(nFrz?'<b>'+nFrz+'</b> позиций заморожены перед отчётом (T−7).':''),true)
     :take('все уровни реалистичны: вероятности касания в разумном диапазоне.');
   $('#levelsSub').textContent=GARCH_SUB(D);
   $('#levelsTable').innerHTML='<thead><tr><th>Тикер</th><th class="num">Цена</th><th class="num">σ год</th>'
@@ -36,8 +37,12 @@ function renderLevels(D){
         return l?'<td class="num"><b>'+l.v+'</b> · '+pct1(l.p)+'</td>':'<td class="num mut">—</td>';
       }).join('');
       var flags=[];
+      if(it.thesis)flags.push('<span class="mut">тезис: '+(STATE_META[it.thesis.state]?STATE_META[it.thesis.state][0]:it.thesis.state)+(it.thesis.conditional?' · уровни условные':'')+(it.thesis.basis?' — '+esc(it.thesis.basis):'')+'</span>');
+      if(it.frozen)flags.push('<span class="oc">❄ заморожен до отчёта через '+it.frozen.days+' дн — полный транш запрещён</span>');
       if(it.fantasy)flags.push('<span class="dn">уровень-фантазия (P(T3)&lt;5%)</span>');
+      if(it.suggest&&it.suggest.fantasy)flags.push('<span class="mut">замена: '+it.suggest.fantasy.level+' ('+it.suggest.fantasy.reason+')</span>');
       if(it.merge&&it.merge.length)flags.push('<span class="oc">склеить: '+it.merge.map(function(p){return p[0]+'≈'+p[1]}).join(', ')+'</span>');
+      if(it.suggest&&it.suggest.merge)flags.push('<span class="mut">склеенная сетка: '+it.suggest.merge.grid.join(' / ')+'</span>');
       if(it.waitCost!=null&&Math.abs(it.waitCost)>1)flags.push('<span class="mut">E[издержки ожидания] '+money(it.waitCost)+'/год на позицию (прокси)</span>');
       if(it.until)flags.push('<span class="mut">ждёт: '+esc(it.until.event)+'</span>');
       return '<tr'+(it.fantasy?' class="odrv"':'')+'><td class="tk">'+it.t+'</td>'
@@ -112,6 +117,7 @@ function fanSvg(yearly,startValue,years){
     +'</svg>';
 }
 
+var FACTOR_LABELS={SMH:'полупроводники',XLK:'технологии',URA:'уран',MOO:'агрохимия',GLD:'золото',XLE:'энергетика',IWM:'малая капитализация',TLT:'дюрация (ставки)',UUP:'валюта (доллар)',SPY:'рынок'};
 function render(D){
   var topF=D.factors.map(function(f){return [f,Math.abs(D.exposure[f]||0)]}).sort(function(a,b){return b[1]-a[1]})[0];
   var sharePct=Math.round(100*D.enb/Math.max(1,D.tickers.length));
@@ -126,14 +132,43 @@ function render(D){
   $('#expTable').innerHTML='<thead><tr><th>Фактор</th><th class="num">Портфель β</th>'
     +tags.map(function(t){return '<th class="num">'+esc(TAGNAME[t]||t)+'</th>'}).join('')+'</tr></thead><tbody>'
     +D.factors.map(function(f){
-      return '<tr><td class="tk">'+f+'</td><td class="num"><b>'+n2(D.exposure[f])+'</b></td>'
+      return '<tr><td class="tk">'+f+' <i class="mut">'+esc(FACTOR_LABELS[f]||'')+'</i></td><td class="num"><b>'+n2(D.exposure[f])+'</b></td>'
         +tags.map(function(t){return '<td class="num">'+n2((D.byTag[t]||{})[f])+'</td>'}).join('')+'</tr>';
     }).join('')+'</tbody>';
 
-  $('#stressSub').textContent='стресс: SPY-день < −2% ('+D.stress.n+' дн) · норма: '+D.normal.n+' дн';
+  // #М6: ортогонализованные беты (Грам-Шмидт, рынок первым) — «чувствительность
+  // сверх рыночной»; + R² и 95% CI по позициям
+  var orthBox=$('#orthBox');
+  if(orthBox&&D.orthOrder){
+    var oo=D.orthOrder.filter(function(f){return f!=='SPY'});
+    var orthRows=oo.map(function(f){
+      return '<tr><td class="tk">'+f+' <i class="mut">'+esc(FACTOR_LABELS[f]||'')+'</i></td>'
+        +'<td class="num"><b>'+n2((D.orthExposure||{})[f])+'</b></td>'
+        +tags.map(function(t){return '<td class="num">'+n2(((D.orthByTag||{})[t]||{})[f])+'</td>'}).join('')+'</tr>';
+    }).join('');
+    $('#orthTable').innerHTML='<thead><tr><th>Фактор (за вычетом рынка)</th><th class="num">Портфель β</th>'
+      +tags.map(function(t){return '<th class="num">'+esc(TAGNAME[t]||t)+'</th>'}).join('')+'</tr></thead><tbody>'+orthRows+'</tbody>';
+    var aiNote=D.aiOrthSmh!=null
+      ?'AI-ядро, β к орто-SMH: <b>'+n2(D.aiOrthSmh)+'</b> — на каждый 1% полупроводников СВЕРХ рынка ядро отвечает этим процентом книги.'
+      :'AI-β орто-SMH скрыта: после ортогонализации знак артефактный — проверь данные (лог на сервере).';
+    $('#orthNote').innerHTML='<div class="cs">'+aiNote+'</div>';
+    var ciRows=(D.tickers||[]).map(function(t){
+      var b=(D.betas||{})[t]||{};
+      var ci=b.ci&&b.ci.SMH?(b.ci.SMH[0].toFixed(2)+' … '+b.ci.SMH[1].toFixed(2)):'—';
+      var ob=(D.orthBetas||{})[t]||{};
+      return '<tr><td class="tk">'+t+'</td><td class="num">'+n2(b.beta?b.beta.SMH:null)+'</td>'
+        +'<td class="num">'+(ob.SMH!=null?n2(ob.SMH):'—')+'</td>'
+        +'<td class="num">'+ci+'</td>'
+        +'<td class="num">'+((D.r2||{})[t]!=null?(D.r2[t]*100).toFixed(0)+'%':'—')+'</td></tr>';
+    }).join('');
+    var ciTable=$('#ciTable');
+    if(ciTable)ciTable.innerHTML='<thead><tr><th>Тикер</th><th class="num">β SMH (сырая)</th><th class="num">β орто-SMH</th><th class="num">95% CI β SMH</th><th class="num">R²</th></tr></thead><tbody>'+ciRows+'</tbody>';
+  }
+
+  $('#stressSub').textContent='стресс: SPY-день < −2% ('+D.stress.n+' дн из '+D.stress.rangeDays+') · норма: '+D.normal.n+' дн';
   if(D.stress.dr==null||!D.corrJump.length){
     $('#stressTable').innerHTML='<tbody><tr><td class="cs" style="padding:14px 4px;color:var(--ink3)">'
-      +'Стресс-дней за год меньше 10 ('+D.stress.n+') — условные корреляции не рассчитываются: выборка нерепрезентативна.</td></tr></tbody>';
+      +'Стресс-дней меньше 10 даже в расширенном окне до 3 лет ('+D.stress.n+') — условные корреляции не считаем: выборка нерепрезентативна.</td></tr></tbody>';
     return;
   }
   var warn=D.corrJump.some(function(c){return c.jump>0.2})
@@ -242,18 +277,19 @@ function evTxt(e){
   return 'VIX '+(e.kind==='vix_above'?'≥':'≤')+e.level+' за '+h;
 }
 function renderCommittee(D){
-  var w=D.weights||{},b=D.brier||{};
+  var wFull=D.weights||{},w=wFull.weights||{},b=D.brier||{},bss=D.bss||{};
   var predsAll=D.predictions||[];
   var waiting=predsAll.filter(function(p){return p.outcome==null}).length;
   var scored=predsAll.filter(function(p){return p.outcome!=null}).length;
   $('#comSub').textContent=predsAll.length?waiting+' ждут исхода · '+scored+' оценено':'';
   var head=scored
-    ?take('оценено прогнозов: '+scored+'. Точность (Brier, меньше — лучше) уже видна слева; вес в консенсусе тем больше, чем точнее роль.')
+    ?take('оценено прогнозов: '+scored+'. Навык меряется Skill Score относительно случайного блуждания (BSS &gt; 0 — агент лучше монетки); вес консенсуса = softmax(BSS)'+(wFull.bucket!=null?', пересчёт раз в 20 исходов':'')+'. Прогнозы с prob ≈ baseline неинформативны и не засчитываются.')
     :take(predsAll.length?('агенты дали '+predsAll.length+' прогнозов. Первый созреет, когда истечёт самый короткий горизонт — тогда появится точность. Пока просто наблюдай.'):'комитет ещё не созывался — нажми «Созвать комитет» или жди еженедельного расписания.');
   var roleRow=D.roles.map(function(r){
-    var br=b[r.id],wt=w[r.id];
+    var br=b[r.id],wt=w[r.id],bs=bss[r.id];
     return '<div class="mc-row"><span>'+esc(r.name)+(wt!=null?' · вес '+(wt*100).toFixed(0)+'%':'')+'</span>'
-      +'<b>'+(br==null?'пока без оценки':'Brier '+br.toFixed(3)+' (меньше — лучше)')+'</b></div>';
+      +'<b>'+(bs&&bs.bss!=null?('BSS '+(bs.bss>=0?'+':'')+bs.bss.toFixed(2)+' (n='+bs.n+')')
+        :br==null?'пока без оценки':'Brier '+br.toFixed(3))+'</b></div>';
   }).join('');
   var cal=(D.calibration||[]).filter(function(x){return x.n>0}).map(function(x){
     return '<div class="mc-row"><span>обещали '+(x.claimed*100).toFixed(0)+'%</span><b>сбылось '+(x.hitRate*100).toFixed(0)+'% · n='+x.n+'</b></div>';
@@ -261,9 +297,12 @@ function renderCommittee(D){
   var preds=predsAll.slice(0,15).map(function(p){
     return '<div class="mc-row"><span>'+esc(ROLENAME[p.role]||p.role)+' · '+esc(evTxt(p.event))+'</span>'
       +'<b>'+(p.prob*100).toFixed(0)+'%'
+      +(p.baseline!=null?' <i class="mut" title="вероятность случайного блуждания">база '+(p.baseline*100).toFixed(0)+'%</i>':'')
+      +(p.informative===false?' <i class="mut">неинформативен</i>':'')
       +(p.outcome==null?' <i class="mut">ждёт</i>':(p.outcome?' <i class="up">сбылось</i>':' <i class="dn">не сбылось</i>'))+'</b></div>';
   }).join('');
-  $('#comCard').innerHTML=head+'<div class="mc-grid"><div><div class="ph">Кто точнее (Brier)</div>'+roleRow
+  $('#comCard').innerHTML=head+'<div class="mc-grid"><div><div class="ph">Кто точнее</div>'+roleRow
+    +(wFull.basis?'<div class="cs mut">веса: '+esc(wFull.basis)+(wFull.nextRecalcAt!=null?' · пересчёт после '+wFull.nextRecalcAt+' исходов':'')+'</div>':'')
     +'<div class="ph" style="margin-top:12px">Обещанное против сбышегося</div>'+(cal||'<div class="cs mut">пока нет созревших</div>')
     +'<div style="margin-top:14px"><button class="lab-btn" id="comRun">Созвать комитет</button> '
     +'<button class="lab-btn" id="comScore">Оценить созревшие</button></div></div>'
@@ -290,36 +329,52 @@ fetch('/api/lab/detector').then(function(r){return r.json()}).then(renderDetecto
 fetch('/api/lab/falsify').then(function(r){return r.json()}).then(renderFalsify).catch(function(e){$('#falSub').textContent='ошибка: '+e.message});
 fetch('/api/lab/committee').then(function(r){return r.json()}).then(renderCommittee).catch(function(e){$('#comSub').textContent='ошибка: '+e.message});
 
-/* ============== журнал: контрфактуалы (#6) ============== */
+/* ============== журнал: контрфактуалы (#6/#М8) ============== */
 function cls2(v){return v==null?'mut':(v>=0?'up':'dn')}
 function renderCF(D){
-  var items=D.items||[], adv=D.advice;
+  var items=D.items||[], adv=D.advice, twr=D.twr, levels=D.levels;
   $('#cfSub').textContent=items.length?'решений разобрано: '+items.length:'';
-  if(!items.length&&!adv){
-    $('#cfTable').innerHTML='<tbody><tr><td class="cs" style="padding:12px 4px;color:var(--ink3)">Здесь появится разбор через 30 дней после первого решения: «а что было бы, если просто держать / купить равновесный вотчлист». Кнопка «Записать решение» — в футере главного терминала; сделки из Tradernet подхватываются сами.</td></tr></tbody>';
+  if(!items.length&&!adv&&!twr){
+    $('#cfTable').innerHTML='<tbody><tr><td class="cs" style="padding:12px 4px;color:var(--ink3)">Здесь появится разбор через 30 дней после первого решения: «а что было бы, если просто держать / купить равновесный вотчлист / взять ITOT». Кнопка «Записать решение» — в футере главного терминала; сделки из Tradernet подхватываются сами.</td></tr></tbody>';
     return;
   }
-  var edges=items.map(function(x){return x.edgePct}).filter(function(v){return v!=null});
+  var edges=[];
+  items.forEach(function(x){(x.horizons||[]).forEach(function(h){if(h.edgePct!=null)edges.push(h.edgePct)})});
   var avgEdge=edges.length?edges.reduce(function(s,v){return s+v},0)/edges.length:null;
-  var head=avgEdge!=null
+  var twrLine=twr&&twr.portfolio
+    ?'<div class="mc-row"><span>TWR портфеля c '+twr.portfolio.since+'</span><b class="'+cls2(twr.portfolio.value)+'">'+(twr.portfolio.value>=0?'+':'')+(twr.portfolio.value*100).toFixed(1)+'%'
+      +(twr.itot&&twr.itot.value!=null?' · ITOT '+(twr.itot.value>=0?'+':'')+(twr.itot.value*100).toFixed(1)+'%':' · ITOT ждёт данных')+'</b></div>'
+      +'<div class="cs mut">доходность, взвешенная по времени: тайминг довнесений не искажает сравнение с бенчмарком (записывай довнесения кнопкой «Записать решение»)</div>'
+    :'';
+  var head=(avgEdge!=null
     ?take(avgEdge>=0
-      ?'твой выбор в среднем обгонял альтернативу на <b>+'+n2(avgEdge)+'%</b> за месяц — стокпикинг пока помогает.'
-      :'твой выбор в среднем отставал от альтернативы на <b>'+n2(Math.abs(avgEdge))+'%</b> — повод честно пересмотреть подход.',avgEdge<-1)
-    :take('решения ещё не созрели для сравнения (нужен месяц).');
+      ?'твой выбор в среднем обгонял альтернативу на <b>+'+n2(avgEdge)+'%</b> по созревшим горизонтам — стокпикинг пока помогает.'
+      :'твой выбор в среднем отставал от альтернативы на <b>'+n2(Math.abs(avgEdge))+'</b>% — повод честно пересмотреть подход.',avgEdge<-1)
+    :take('решения ещё не созрели для сравнения (нужен месяц).'))+twrLine;
   var rows=items.map(function(x){
+    var h30=(x.horizons||[]).find(function(h){return h.h===30});
+    var h90=(x.horizons||[]).find(function(h){return h.h===90});
+    var h365=(x.horizons||[]).find(function(h){return h.h===365});
+    function hcell(h){
+      if(!h)return '<td class="num mut">—</td><td class="num mut">—</td>';
+      return '<td class="num '+cls2(h.actualPct)+'">'+n2(h.actualPct)+'%</td>'
+        +'<td class="num mut">'+n2(h.watchPct!=null?h.watchPct:h.itotPct)+'%'+(h.holdPct!=null?' · держ '+n2(h.holdPct)+'%':'')+'</td>';
+    }
     return '<tr><td class="tk">'+x.t+'</td><td>'+(x.type==='buy'?'покупка':x.type==='sell'?'продажа':'пропуск')+'</td>'
-      +'<td class="num '+cls2(x.actualPct)+'">'+n2(x.actualPct)+'%</td>'
-      +'<td class="num '+cls2(x.alternativePct)+'">'+n2(x.alternativePct)+'%</td>'
-      +'<td class="num '+cls2(x.edgePct)+'">'+n2(x.edgePct)+'%</td>'
-      +'<td class="nt">'+(x.alternativeLabel==='держать до сейчас'?'если бы просто держал':'если бы купил равновесный вотчлист')+'</td></tr>';
+      +hcell(h30)+hcell(h90)+hcell(h365)+'</tr>';
   }).join('');
   var advRow=adv&&adv.n
-    ?'<tr><td class="tk">Σ</td><td>советы</td><td class="num mut">—</td><td class="num mut">—</td>'
-     +'<td class="num '+cls2(-adv.meanRet)+'">'+(adv.hits+'/'+adv.n)+'</td>'
-     +'<td class="nt">предупреждения детектора сбывались в '+Math.round(adv.hits/Math.max(1,adv.n)*100)+'% случаев (бумага падала)</td></tr>'
+    ?'<tr><td class="tk">Σ</td><td>советы детектора</td><td class="num mut">—</td>'
+     +'<td class="num '+cls2(-adv.meanRet)+'">'+(adv.hits+'/'+adv.n)+' сбывалось</td>'
+     +'<td class="num mut">—</td><td class="num mut">—</td></tr>'
     :'';
-  $('#cfTable').innerHTML='<thead><tr><th>Тикер</th><th>Тип</th><th class="num">Твой результат</th><th class="num">Альтернатива</th><th class="num">Разница</th><th>Альтернатива — что это</th></tr></thead>'
-    +'<tbody><tr><td colspan="6" style="padding:0 0 10px;border:none">'+head+'</td></tr>'+rows+advRow+'</tbody>';
+  var lvlRow=levels&&levels.n
+    ?'<tr><td class="tk">Σ</td><td>уровни системы</td><td class="num mut">—</td>'
+     +'<td class="num '+cls2(levels.meanRet)+'">'+(levels.good+'/'+levels.n)+' выгодно</td>'
+     +'<td class="num mut">—</td><td class="num mut">—</td></tr>'
+    :'';
+  $('#cfTable').innerHTML='<thead><tr><th>Тикер</th><th>Тип</th><th class="num">30д · факт</th><th class="num">30д · альт</th><th class="num">90д · факт</th><th class="num">90д · альт</th><th class="num">365д · факт</th><th class="num">365д · альт</th></tr></thead>'
+    +'<tbody><tr><td colspan="8" style="padding:0 0 10px;border:none">'+head+'</td></tr>'+rows+advRow+lvlRow+'</tbody>';
 }
 fetch('/api/lab/counterfactuals').then(function(r){return r.json()}).then(renderCF).catch(function(e){$('#cfSub').textContent='ошибка: '+e.message});
 
@@ -428,3 +483,137 @@ function renderCC(D){
   }
 }
 fetch('/api/lab/capcycle').then(function(r){return r.json()}).then(renderCC).catch(function(e){$('#ccSub').textContent='ошибка: '+e.message});
+
+/* ============== М1/М3: машина состояний тезисов + очередь пересмотров ============== */
+var STATE_META={intact:['цел','g'],watch:['наблюдение','y'],damaged:['повреждён','r'],recovering:['восстановление','b'],dead:['мёртв','r']};
+function fmtDate10(iso){return iso?new Date(iso).toLocaleDateString('ru-RU'):''}
+function renderTheses(D){
+  var items=Object.values(D.items||{});
+  var q=D.queue||{};
+  var damaged=items.filter(function(r){return r.state==='damaged'}).length;
+  var dead=items.filter(function(r){return r.state==='dead'}).length;
+  var watchN=items.filter(function(r){return r.state==='watch'}).length;
+  $('#thSub').textContent=items.length+' тезисов'+(damaged?' · '+damaged+' повреждено':'')+(dead?' · '+dead+' мертво':'')+(watchN?' · '+watchN+' под наблюдением':'');
+  var rows=items.sort(function(a,b){return (STATE_META[a.state]?0:1)-(STATE_META[b.state]?0:1)||a.t.localeCompare(b.t)}).map(function(r){
+    var sm=STATE_META[r.state]||['?','d'];
+    var lv=r.levels;
+    var lvStr=lv?('T1 '+n2(lv.t1)+' · T2 '+n2(lv.t2)+' · T3 '+n2(lv.t3)+(lv.conditional?' <i class="mut">(условные)</i>':'')+(lv.until?' <i class="oc">ждёт: '+esc(lv.until.event)+'</i>':'')):'<span class="mut">аннулированы</span>';
+    var exit=r.exit_plan&&r.state==='dead'?'<div class="dn">выход: цель '+(r.exit_plan.target!=null?'$'+n2(r.exit_plan.target):'отскок')+' к '+esc(r.exit_plan.deadline||'—')+'</div>':'';
+    var rev=r.review?('к '+r.review.due.slice(8,10)+'.'+r.review.due.slice(5,7)+(r.review.reason?' · '+esc(r.review.reason):'')):'—';
+    var revCls=q.queue&&q.queue.some(function(x){return x.t===r.t&&x.priority===0})?' class="dn"':'';
+    var last=r.history&&r.history.length?r.history[r.history.length-1]:null;
+    var hist=last?fmtDate10(last.date)+': '+(last.from?last.from+' → ':'')+last.to+' ('+esc(last.trigger)+')':'';
+    var prop=r.proposed&&r.proposed.state&&r.proposed.state!==r.state?' <i class="mut" title="'+esc(r.proposed.note||'')+'">мнение агента: '+r.proposed.state+'</i>':'';
+    return '<tr><td class="tk">'+r.t+'</td>'
+      +'<td><span class="pill '+sm[1]+'">'+sm[0]+'</span>'+prop+'</td>'
+      +'<td class="nt">'+esc(r.thesis||'—')+(r.damaged_pillars&&r.damaged_pillars.length?'<div class="dn">задето: '+esc(r.damaged_pillars.join(', '))+'</div>':'')+'</td>'
+      +'<td class="nt">'+lvStr+exit+'</td>'
+      +'<td class="nt"'+revCls+'>'+rev+'</td>'
+      +'<td class="nt mut">'+hist+'</td>'
+      +'<td class="nt"><button class="lab-btn" data-th-derive="'+r.t+'">Перевывести уровни</button>'
+      +'<div class="th-manual"><select data-th-to="'+r.t+'">'
+      +Object.keys(STATE_META).map(function(s){return '<option value="'+s+'"'+(s===r.state?' selected':'')+'>'+STATE_META[s][0]+'</option>'}).join('')
+      +'</select><button class="lab-btn" data-th-manual="'+r.t+'">Перевести</button></div></td></tr>';
+  }).join('');
+  $('#thTable').innerHTML='<thead><tr><th>Тикер</th><th>Состояние</th><th>Тезис / опоры</th><th>Уровни</th><th>Пересмотр</th><th>Последний переход</th><th>Действия</th></tr></thead><tbody>'+rows+'</tbody>';
+  hookTheses();
+  renderQueue(q);
+}
+function renderQueue(q){
+  var parts=[];
+  var queue=q.queue||[];
+  if(queue.length){
+    parts.push('<div class="ph">Пересмотры тезисов</div>'+queue.map(function(x){
+      var c=x.priority===0?'r':x.priority===1?'r':x.priority===2?'y':'d';
+      return '<div class="mc-row"><span><span class="pill '+c+'">'+(STATE_META[x.state]?STATE_META[x.state][0]:x.state)+'</span> <b>'+x.t+'</b></span><b>'+(x.priority===0?'<span class="dn">'+esc(x.why)+'</span>':esc(x.why))+'</b></div>';
+    }).join(''));
+  }
+  var soon=q.soon||[];
+  if(soon.length){
+    parts.push('<div class="ph" style="margin-top:12px">Отчёты в ближайшие 7 дней — уровни заморожены</div>'+soon.map(function(s){
+      return '<div class="mc-row"><span><b>'+s.t+'</b></span><b>через '+s.days+' дн — полный транш перед отчётом запрещён</b></div>';
+    }).join(''));
+  }
+  var trig=q.falsifyTriggered||[];
+  if(trig.length){
+    parts.push('<div class="ph" style="margin-top:12px">Сработавшие фальсификации</div>'+trig.map(function(x){
+      return '<div class="mc-row"><span><b>'+x.t+'</b></span><b class="dn">'+esc(x.why)+'</b></div>';
+    }).join(''));
+  }
+  var kn=q.known||[];
+  if(kn.length){
+    parts.push('<div class="ph" style="margin-top:12px">Известные события</div>'+kn.map(function(e){
+      return '<div class="mc-row"><span>'+esc(e.label)+'</span><b>через '+e.days+' дн</b></div>';
+    }).join(''));
+  }
+  $('#qSub').textContent=queue.length?(queue.filter(function(x){return x.priority===0}).length+' просрочено · '+(queue.length)+' в очереди'):'пусто';
+  $('#qCard').innerHTML=parts.length?parts.join(''):'<div class="cs mut">Очередь пуста: просроченных пересмотров нет, отчётов в ближайшую неделю не видно, фальсификации молчат.</div>';
+}
+function hookTheses(){
+  $$('#thTable [data-th-derive]').forEach(function(b){
+    b.addEventListener('click',function(){
+      b.disabled=true;b.textContent='Выводим…';
+      post('/api/lab/theses',{action:'derive',t:b.dataset.thDerive})
+        .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');b.disabled=false;b.textContent='Перевывести уровни'});
+    });
+    lockGuest(b);
+  });
+  $$('#thTable [data-th-manual]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t=b.dataset.thManual;
+      var sel=document.querySelector('select[data-th-to="'+t+'"]');
+      var reason=prompt('Обоснование ручного перехода '+t+' → '+(sel?sel.value:'')+' (пишется в историю):','');
+      if(reason==null)return;
+      b.disabled=true;
+      post('/api/lab/theses',{t:t,to:sel?sel.value:'',reason:reason})
+        .then(function(){location.reload()}).catch(function(e){basicToast(e.message,'r');b.disabled=false});
+    });
+    lockGuest(b);
+  });
+}
+fetch('/api/lab/theses').then(function(r){return r.json()}).then(renderTheses).catch(function(e){$('#thSub').textContent='ошибка: '+e.message});
+
+/* ============== М5: стоит ли покупать ============== */
+var DECISION_META={buy_full:['ПОКУПАТЬ ПОЛНЫМ ТРАНШЕМ','g'],buy_half:['ПОЛОВИННЫЙ ТРАНШЕМ','y'],wait:['ЖДАТЬ','y'],no:['НЕТ','r'],no_decision:['НЕТ РЕШЕНИЯ','d']};
+function renderBuyCheck(res){
+  var ck=res.checklist||{};
+  var dm=DECISION_META[res.decision]||['?','d'];
+  var rows=[];
+  var sm=STATE_META[ck.thesis?ck.thesis.state:'']||null;
+  rows.push(['Состояние тезиса',ck.thesis?(STATE_META[ck.thesis.state][0]+(ck.thesis.history&&ck.thesis.history.length?' · переходов: '+ck.thesis.history.length:'')):'нет записи']);
+  rows.push(['Отчёт',ck.events&&ck.events.earningsDays!=null?'через '+ck.events.earningsDays+' дн'+(res.binaryRisk?' — БИНАРНЫЙ РИСК':''):'дата неизвестна']);
+  rows.push(['Движение',ck.movement?(ck.movement.class==='beta'?'β-движение':ck.movement.class==='noise'?'шум':ck.movement.class==='damage'?'ПОВРЕЖДЕНИЕ':'нет данных')+(ck.movement.reason?' — '+ck.movement.reason:''):'нет данных']);
+  rows.push(['Уровни',ck.levels&&ck.levels.active?('T1 '+n2(ck.levels.t1)+' / T2 '+n2(ck.levels.t2)+' / T3 '+n2(ck.levels.t3)+(ck.levels.inZone?' — цена В зоне':'')+(ck.levels.until?' — ждёт: '+esc(ck.levels.until):'')+(ck.levels.frozen?' — ЗАМОРОЖЕНЫ перед отчётом':'')):'не активны']);
+  if(ck.constraints){
+    rows.push(['Мандат после покупки','имя '+(ck.constraints.namePctAfter*100).toFixed(1)+'% / 8,4%'+(ck.constraints.nameBreached?' — ПРОБИТ':'')
+      +' · AI '+(ck.constraints.aiPct*100).toFixed(1)+'%'+(ck.constraints.aiBreached?' — ПРОБИТ':'')
+      +' · кэш останется '+(ck.constraints.cashPctAfter*100).toFixed(1)+'%']);
+  } else rows.push(['Мандат после покупки','нет данных портфеля']);
+  if(ck.baserates)rows.push(['Базовые ставки',ck.baserates.class?''+ck.baserates.class+(ck.baserates.median12m!=null?' · медиана 12м '+n2(ck.baserates.median12m)+'%':''):'класс не определён']);
+  var size=res.size||{};
+  var sizeStr=(size.shares!=null?('~'+size.shares+' акций по $'+n2(res.px)):'')
+    +(size.namePctAfter!=null?' · имя станет '+(size.namePctAfter*100).toFixed(1)+'% книги':'');
+  $('#bcAns').innerHTML='<div class="det-card">'
+    +'<div class="det-h"><b>'+res.t+' · $'+Math.round(res.usd)+'</b><span class="pill '+dm[1]+'">'+dm[0]+'</span></div>'
+    +(res.reason?'<div class="det-reason">'+esc(res.reason)+'</div>':'')
+    +(res.wait_what?'<div class="det-pillar">ждать: '+esc(res.wait_what)+'</div>':'')
+    +(res.missing&&res.missing.length?'<div class="lab-warn">не хватает: '+res.missing.map(esc).join(' · ')+'</div>':'')
+    +'<div style="margin-top:8px">'+rows.map(function(r){return '<div class="mc-row"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>'}).join('')+'</div>'
+    +(sizeStr?'<div class="det-conf mut">размер: '+sizeStr+' — посчитано машиной, не агентом</div>':'')
+    +'</div>';
+}
+function hookBuyCheck(){
+  var go=$('#bcGo');
+  if(!go)return;
+  go.addEventListener('click',function(){
+    var t=($('#bcTicker').value||'').trim().toUpperCase();
+    var usd=+($('#bcUsd').value||0);
+    if(!t||!(usd>0)){basicToast('введи тикер и сумму','o');return}
+    go.disabled=true;go.textContent='Система думает…';
+    post('/api/lab/buycheck',{t:t,usd:usd})
+      .then(function(j){renderBuyCheck(j.result);go.disabled=false;go.textContent='Спросить систему'})
+      .catch(function(e){basicToast(e.message,'r');go.disabled=false;go.textContent='Спросить систему'});
+  });
+  lockGuest(go);
+}
+hookBuyCheck();

@@ -10,6 +10,7 @@ const { PROMPTS } = require('../prompts');
 const { edgarRecent } = require('../edgar');
 const { chart } = require('../yahoo');
 const defaultLlm = require('../llm');
+const theses = require('./theses');
 
 const REG_FILE = path.join(__dirname, '..', '..', 'data', 'falsifications.json');
 
@@ -27,7 +28,9 @@ function saveRegistry(reg) {
 
 const GEN_SCHEMA = {
   thesis: 'string',
+  pillars: 'array',
   conditions: 'array',
+  recovery_conditions: 'array',
   levels: 'array',
   until_event: 'string',
   until_check: 'string',
@@ -35,6 +38,7 @@ const GEN_SCHEMA = {
 
 const CHECK_SCHEMA = {
   verdicts: 'array',
+  proposed_state: 'enum:intact,watch,damaged,dead',
   levels: 'array',
   until_event: 'string',
   until_check: 'string',
@@ -98,6 +102,12 @@ async function generate(t, { llm = defaultLlm } = {}) {
     .slice(0, 3);
   if (conds.length < 3) throw new Error(`${T}: сгенерировано ${conds.length} условий вместо 3`);
 
+  // машина состояний (#М1): тезис/опоры/условия восстановления регистрируются
+  theses.syncFromFalsify(T, {
+    thesis: v.thesis,
+    pillars: (v.pillars || []).map(String).filter(s => s.length > 2).slice(0, 4),
+    recovery_conditions: (v.recovery_conditions || []).map(String).filter(s => s.length > 8).slice(0, 3),
+  });
   const agentMeta = saveAgentMeta(T, meta, v, px, 'falsify-generate');
   const reg = getRegistry().filter(r => r.t !== T);
   const rec = {
@@ -127,17 +137,23 @@ async function check(t, { llm = defaultLlm } = {}) {
     currentPx(T),
   ]);
   const meta = overrides.merged(T, defaultMeta(T));
+  const th = theses.get(T);
   const v = await llm.chat(
     [{ role: 'system', content: PROMPTS.falsifyCheck.system },
-     { role: 'user', content: PROMPTS.falsifyCheck.user({ T, thesis: rec.thesis, meta, px, conditions: rec.conditions, news, filings }) }],
+     { role: 'user', content: PROMPTS.falsifyCheck.user({ T, thesis: rec.thesis, state: th?.state || null, meta, px, conditions: rec.conditions, news, filings }) }],
     { schema: CHECK_SCHEMA, task: 'falsify-check', t: T, temperature: 0.1 },
   );
 
   const verdicts = (v.verdicts || [])
     .filter(x => Number.isInteger(x.i) && x.i >= 0 && x.i < rec.conditions.length)
-    .map(x => ({ i: x.i, triggered: !!x.triggered, evidence: String(x.evidence || '').slice(0, 400) }));
+    .map(x => ({
+      i: x.i, triggered: !!x.triggered,
+      severity: x.severity === 'soft' ? 'soft' : 'hard',
+      evidence: String(x.evidence || '').slice(0, 400),
+    }));
   rec.checks.push({ date: new Date().toISOString(), verdicts });
-  if (verdicts.some(x => x.triggered) && rec.status === 'active') {
+  const wasActive = rec.status === 'active';
+  if (verdicts.some(x => x.triggered) && wasActive) {
     rec.status = 'triggered';
     rec.triggeredAt = new Date().toISOString();
   }
@@ -145,6 +161,24 @@ async function check(t, { llm = defaultLlm } = {}) {
   if (agentMeta) rec.agentMeta = agentMeta;
   reg[idx] = rec;
   saveRegistry(reg);
+
+  // машина состояний (#М1): сработавшее условие → dead (жёсткое) или
+  // damaged (мягкое), с перевыводом уровней/плана выхода
+  if (wasActive) {
+    const fired = verdicts.filter(x => x.triggered);
+    if (fired.length) {
+      const hard = fired.some(x => x.severity !== 'soft');
+      const { runDerive } = require('./derivation');
+      try {
+        await theses.applyEvent(T, {
+          kind: hard ? 'falsify_hard' : 'falsify_soft',
+          source: 'falsify', trigger: 'falsify',
+          evidence: fired.map(x => rec.conditions[x.i]?.text).filter(Boolean).join('; ').slice(0, 400),
+          proposal: v.proposed_state ? { state: v.proposed_state, note: 'мнение агента фальсификаций' } : null,
+        }, { derive: runDerive });
+      } catch { /* записи тезиса может не быть — реестр всё равно сохранён */ }
+    }
+  }
   return rec;
 }
 

@@ -1,7 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { analyzeFactorModel } = require('../src/lab/factors');
+const { analyzeFactorModel, orthogonalize } = require('../src/lab/factors');
+const { pearson } = require('../src/math/stats');
 
 function lcg(seed) {
   let s = seed >>> 0 || 1;
@@ -94,4 +95,29 @@ test('стресс: дни рынка < −2% попадают в стресс-�
   assert.ok(Math.abs(res.stress.corr.Y) < 0.5, 'Y независим');
   assert.ok(res.normal.dr > 0 && res.stress.dr > 0, 'DR положителен в обоих режимах');
   assert.ok(res.corrJump.length === 2);
+});
+
+test('orthogonalize: остатки факторов не коррелируют с базой (рынком)', () => {
+  const rnd = lcg(3), T = 300;
+  const mkt = Array.from({ length: T }, () => rnd() * 0.02);
+  const semi = mkt.map(v => 0.8 * v + rnd() * 0.008); // SMH = 0.8·SPY + шум
+  const R = { SPY: mkt, SMH: semi };
+  const orth = orthogonalize(R, ['SPY', 'SMH']);
+  const c = pearson(orth.SPY, orth.SMH);
+  assert.ok(Math.abs(c) < 0.05, 'орт-остаток SMH не коррелирует с SPY: ' + c);
+});
+
+test('#М6: ортогонализация чинит мультиколлинеарность — β(орто) читается как «сверх рынка»', () => {
+  const { prices, positions } = synth(); // SPY = F1 (тот же ряд!)
+  const res = analyzeFactorModel({ prices, positions, factors: ['F1', 'F2', 'F3'], market: 'SPY' });
+  // сырая β A к F1 = 1.2, но F1 и есть рынок → сверх рынка чувствительность ≈ 0
+  assert.ok(Math.abs(res.betas.A.beta.F1 - 1.2) < 0.15, 'сырая бета на месте');
+  assert.ok(Math.abs(res.orthBetas.A.F1) < 0.15, 'орт-бета к рынко-фактору ≈ 0: ' + res.orthBetas.A.F1);
+  // порядок: рынок первым
+  assert.strictEqual(res.orthOrder[0], 'SPY');
+  // R² и CI на месте
+  assert.ok(res.r2.A > 0.9, 'A почти полностью объяснён факторами: ' + res.r2.A);
+  const ci = res.betas.A.ci.F1;
+  assert.ok(ci[0] < res.betas.A.beta.F1 && ci[1] > res.betas.A.beta.F1, 'β внутри своего 95% CI');
+  assert.ok(res.orthExposure.SPY !== undefined && res.orthByTag.core !== undefined);
 });

@@ -3,6 +3,13 @@ const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// тезисы и вотч отчётов — в отдельные файлы (не боевые)
+process.env.THESES_FILE = path.join(__dirname, '..', 'data', 'cache', '.theses-levels-test.json');
+process.env.REPORTS_WATCH_FILE = path.join(__dirname, '..', 'data', 'cache', '.watch-levels-test.json');
+fs.rmSync(process.env.THESES_FILE, { force: true });
+fs.rmSync(process.env.REPORTS_WATCH_FILE, { force: true });
+
 const { runLevels } = require('../src/lab/levels');
 
 const DIR = path.join(__dirname, '..', 'data', 'cache');

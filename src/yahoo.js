@@ -10,9 +10,9 @@ const FETCH_MS = 8000;
 const fetchT = (url, opts = {}) =>
   fetch(url, { ...opts, signal: AbortSignal.timeout(opts.timeoutMs || FETCH_MS) });
 
-async function chart(symbol, range = '1y') {
+async function chart(symbol, range = '1y', { fetchImpl = fetch } = {}) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
-  const r = await fetchT(url, { headers: UA });
+  const r = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(FETCH_MS) });
   if (!r.ok) throw new Error(`${symbol}: HTTP ${r.status}`);
   const j = await r.json();
   const res = j?.chart?.result?.[0];
@@ -40,13 +40,13 @@ async function chart(symbol, range = '1y') {
 const sma = (a, n) => a.length < n ? null : a.slice(-n).reduce((s, x) => s + x, 0) / n;
 
 // ── Календарь отчётов: quoteSummary требует cookie + crumb ──
-// чистый партер: json → { ts, days } | null (только вперёд, до 30 дней)
+// чистый партер: json → { ts, days } | null (только вперёд, до 60 дней)
 function parseEarnings(j, now = Date.now()) {
   const arr = j?.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate;
   if (!Array.isArray(arr)) return null;
   const soon = arr
     .map(d => (d && typeof d.raw === 'number' ? d.raw * 1000 : null))
-    .filter(ts => ts != null && ts > now && ts < now + 31 * 864e5);
+    .filter(ts => ts != null && ts > now && ts < now + 60 * 864e5);
   if (!soon.length) return null;
   const ts = Math.min(...soon);
   return { ts, days: Math.max(0, Math.round((ts - now) / 864e5)) };
@@ -59,15 +59,16 @@ function splitSetCookie(h) {
 }
 
 let authState = null; // { cookie, crumb, ts } — живёт час
-async function yahooAuth() {
+async function yahooAuth({ fetchImpl } = {}) {
   if (authState && Date.now() - authState.ts < 3600e3) return authState;
+  const f = fetchImpl ? (url, opts) => fetchImpl(url, opts) : fetchT;
   // fc.yahoo.com отвечает 404, но выставляет cookie A3
-  const r1 = await fetchT('https://fc.yahoo.com/', { headers: UA });
+  const r1 = await f('https://fc.yahoo.com/', { headers: UA });
   let cookies = [];
   if (typeof r1.headers.getSetCookie === 'function') cookies = r1.headers.getSetCookie();
   else cookies = splitSetCookie(r1.headers.get('set-cookie'));
   const cookie = cookies.map(c => c.split(';')[0]).join('; ');
-  const r2 = await fetchT('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+  const r2 = await f('https://query1.finance.yahoo.com/v1/test/getcrumb', {
     headers: { ...UA, ...(cookie ? { Cookie: cookie } : {}) },
   });
   if (!r2.ok) throw new Error('getcrumb: HTTP ' + r2.status);
@@ -115,4 +116,4 @@ async function pool(items, fn, size = 6) {
   return out;
 }
 
-module.exports = { chart, sma, spark, pool, parseEarnings, earningsDate };
+module.exports = { chart, sma, spark, pool, parseEarnings, earningsDate, yahooAuth };

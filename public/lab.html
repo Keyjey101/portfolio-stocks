@@ -21,6 +21,10 @@
     <svg class="l" viewBox="0 0 24 24"><circle cx="8" cy="16" r="4"/><path d="M11 13 21 3M17.5 6.5 20 9M14.5 9.5l2 2"/></svg>
     <svg class="u" viewBox="0 0 24 24"><rect x="5" y="11" width="13" height="9" rx="2"/><path d="M8 11V7.5A4.5 4.5 0 0 1 16.9 6"/></svg>
   </span></button>
+  <a class="hbtn owner-link" href="/stock-analysis" title="Фундаментальная оценка акций">
+    <svg viewBox="0 0 24 24"><path d="M3 17l4-6 4 3 5-7"/><path d="M16 7h4v4"/></svg>
+    <span class="ht">оценка акций</span>
+  </a>
   <a class="hbtn" href="/" title="К терминалу">
     <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
     <span class="ht">к терминалу</span>
@@ -43,11 +47,40 @@
 
   <!-- ═══ навигация ═══ -->
   <nav class="lab-nav" aria-label="разделы">
+    <a href="#g-theses">Тезисы</a>
     <a href="#g-portfolio">Портфель</a>
     <a href="#g-future">Прогноз</a>
     <a href="#g-agents">Агенты</a>
     <a href="#g-decisions">Решения и рынок</a>
   </nav>
+
+  <!-- ═══ группа 0: тезисы (машина состояний) ═══ -->
+  <div class="lgroup" id="g-theses">
+    <div class="lg-title">Тезисы ведутся во времени <span class="lg-tag">переходы по правилам · LLM только по триггеру</span></div>
+
+    <section class="grp"><div class="gh">
+      <h3>Машина состояний тезисов</h3><span class="pct" id="thSub"></span><span class="auto-tag auto">авто + руки</span></div>
+      <p class="sec-sub">Каждая позиция живёт в состоянии: <b>цел</b> → <b>наблюдение</b> (негатив без подтверждения) → <b>повреждён</b> (опора задета фактами, старые уровни аннулируются) → <b>восстановление</b> (условная покупка: цена + факт) → <b>мёртв</b> (только выход). Переходы делают правила по детектору, фальсификациям и отчётам; ручной переход требует обоснования и пишется в историю.</p>
+      <div class="tw bez spot"><div class="core"><table id="thTable"></table></div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Очередь пересмотров</h3><span class="pct" id="qSub"></span><span class="auto-tag auto">авто</span></div>
+      <p class="sec-sub">Что и когда пересматривать: просроченные — красным наверх; дальше отчёты в ближайшую неделю, сработавшие фальсификации, зависшие damaged/watch. Наутро после каждого отчёта тезис переоценивается автоматически, уровни — за семь дней до отчёта замораживаются.</p>
+      <div class="bez spot"><div class="core" id="qCard">Собираем очередь…</div></div>
+    </section>
+
+    <section class="grp"><div class="gh">
+      <h3>Стоит ли покупать?</h3><span class="auto-tag manual">руками · LLM по запросу</span></div>
+      <p class="sec-sub">Единая точка входа вместо внешнего аналитика: тикер + сумма → состояние тезиса, свежие события, классификация движения, уровни и условия, проверка мандата, близость отчёта, базовые ставки — и однозначное решение (или честное «нет решения: не хватает X»).</p>
+      <div class="bez spot"><div class="core" id="bcCard">
+        <div class="fal-new"><input id="bcTicker" placeholder="ТИКЕР (напр. TSM)" maxlength="8">
+        <input id="bcUsd" type="number" min="1" step="1" placeholder="$ суммы" style="width:130px">
+        <button class="lab-btn" id="bcGo">Спросить систему</button></div>
+        <div id="bcAns"></div>
+      </div></div>
+    </section>
+  </div>
 
   <!-- ═══ группа 1: портфель ═══ -->
   <div class="lgroup" id="g-portfolio">
@@ -61,9 +94,15 @@
 
     <section class="grp"><div class="gh">
       <h3>К чему привязан портфель</h3><span class="pct" id="expSub"></span><span class="auto-tag auto">авто</span></div>
-      <p class="sec-sub">Бета показывает: если этот сектор сдвинется на 1% — портфель сдвинется на столько-то процентов. Главная строка — «Портфель β».</p>
+      <p class="sec-sub">Бета показывает: если этот сектор сдвинется на 1% — портфель сдвинется на столько-то процентов. Главная строка — «Портфель β». Ниже — то же после ортогонализации: секторы очищены от рынка, бета читается как «чувствительность сверх рыночной» (починено от артефактов мультиколлинеарности), с доверительными интервалами и R².</p>
       <details class="sec-details"><summary>показать таблицу по секторам</summary>
         <div class="tw bez spot"><div class="core"><table id="expTable"></table></div></div>
+      </details>
+      <details class="sec-details"><summary>ортогонализованные беты (за вычетом рынка)</summary>
+        <div class="tw bez spot"><div class="core"><table id="orthTable"></table><div id="orthNote"></div></div></div>
+      </details>
+      <details class="sec-details" id="orthBox"><summary>беты по позициям с 95% CI и R²</summary>
+        <div class="tw bez spot"><div class="core"><table id="ciTable"></table></div></div>
       </details>
     </section>
 

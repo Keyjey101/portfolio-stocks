@@ -3,6 +3,10 @@ const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// тезисы — в отдельный файл, чтобы сидинг не трогал боевой data/theses.json
+process.env.THESES_FILE = path.join(__dirname, '..', 'data', 'cache', '.theses-detector-test.json');
+
 const { runDetector } = require('../src/lab/detector');
 
 const RECS = path.join(__dirname, '..', 'data', 'recs.jsonl');
@@ -40,7 +44,7 @@ test('runDetector: флаг → LLM-атрибуция → кэш + recs; пов
   let llmCalls = 0;
   const llm = { chat: async () => {
     llmCalls++;
-    return { verdict: 'thesis_damage', reason: 'гайденс срезан дважды', pillar: 'рост выручки', confidence: 0.85 };
+    return { verdict: 'thesis_damage', reason: 'гайденс срезан дважды', pillar: 'рост выручки', confidence: 0.85, proposed_state: 'damaged' };
   } };
   t.after(() => { globalThis.fetch = realFetch; });
   globalThis.fetch = async url => {
@@ -66,6 +70,9 @@ test('runDetector: флаг → LLM-атрибуция → кэш + recs; пов
   assert.strictEqual(res.verdicts.length, 1, 'атрибуция только для BRKN');
   assert.strictEqual(res.verdicts[0].t, 'BRKN');
   assert.strictEqual(res.verdicts[0].verdict, 'thesis_damage');
+  // у тестового тикера нет записи тезиса — машина состояний честно отказала,
+  // не тратя второй LLM-вызов на перевывод
+  assert.ok(res.verdicts[0].thesis && res.verdicts[0].thesis.error, 'нет записи — понятная ошибка');
   assert.strictEqual(llmCalls, 1);
   const recsAfter = fs.readFileSync(RECS, 'utf8').split('\n').filter(Boolean).length;
   assert.strictEqual(recsAfter, recsBefore + 1, 'recs.jsonl пополнился');

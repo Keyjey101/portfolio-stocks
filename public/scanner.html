@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e6e7e3">
+<title>Сканер сектора</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23f4f4f2'/%3E%3Cpath d='M3 11l3-4 2.5 2.5L13 4' stroke='%238f6a1e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Manrope:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/equity.css">
+</head><body>
+<div class="amb" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="top"><div class="island">
+  <div class="mark">
+    <span class="mtile"><svg viewBox="0 0 26 26" aria-hidden="true"><path d="M4.5 19 L10.5 11 L14.5 14.5 L21 6" fill="none" stroke="#8f6a1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <h1>Сканер сектора</h1>
+  </div>
+  <span class="spacer"></span>
+  <a class="hbtn" href="/stock-analysis" title="Анализ акции">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <span class="ht">анализ акции</span>
+  </a>
+  <a class="hbtn" href="/lab" title="К лаборатории">
+    <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+    <span class="ht">лаборатория</span>
+  </a>
+  <button class="iconbtn" id="btnAuth" title="Выход" aria-label="Выход владельца"><span class="ic">
+    <svg class="u" viewBox="0 0 24 24"><rect x="5" y="11" width="13" height="9" rx="2"/><path d="M8 11V7.5A4.5 4.5 0 0 1 16.9 6"/></svg>
+  </span></button>
+</div></header>
+
+<main class="wrap eq-wrap">
+
+  <section class="bez spot eq-hero"><div class="core">
+    <div class="ph">Что сканируем</div>
+    <div class="eq-scan-types">
+      <label class="eq-scan-type on">
+        <input type="radio" name="scanType" value="undervalued" checked>
+        <svg viewBox="0 0 24 24"><path d="M3 17l4-6 4 3 5-7"/><path d="M16 7h4v4"/></svg>
+        <span><b>Недооценённые</b><small>FV и MoS: прескрин → глубокий прогон → value-trap гард → новости</small></span>
+      </label>
+      <label class="eq-scan-type">
+        <input type="radio" name="scanType" value="dividend">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h3.5a1.8 1.8 0 1 1 0 3.6H10"/></svg>
+        <span><b>Дивидендные</b><small>yield, payout и качество — один быстрый проход</small></span>
+      </label>
+    </div>
+
+    <div class="eq-filters">
+      <label>Сектор<select id="fSector"><option value="">Все секторы</option></select></label>
+      <label>Капитализация<select id="fCap">
+        <option value="all">Любая</option><option value="micro">от $300M</option>
+        <option value="mid">от $2B</option><option value="large">от $10B</option>
+      </select></label>
+      <label>Объём<select id="fVol">
+        <option value="all">Любой</option><option value="low">от 100K</option>
+        <option value="medium">от 500K</option><option value="high">от 1M</option>
+      </select></label>
+      <label>Top N<select id="fTop">
+        <option>10</option><option selected>20</option><option>30</option><option>50</option>
+      </select></label>
+      <button class="lab-btn" id="goScan">Запустить скан</button>
+    </div>
+    <div class="cs dn eq-err" id="err"></div>
+
+    <div class="eq-progress" id="prog" hidden>
+      <div class="eq-prog-head"><span id="progStep">запуск…</span><span class="mut" id="progEta"></span></div>
+      <div class="boot-tube"><div id="progFill"></div><div class="glint"></div></div>
+      <div class="cs" id="progCounts"></div>
+    </div>
+    <div class="cs eq-cache" id="cacheNote" hidden></div>
+  </div></section>
+
+  <div id="results" hidden>
+    <section class="grp"><div class="gh"><h3>Результаты</h3>
+      <span class="pct" id="stats"></span>
+      <button class="lab-btn" id="csvBtn" style="margin-left:auto">Копировать CSV</button>
+      <button class="lab-btn" id="refreshBtn" style="border-color:var(--line2);color:var(--ink2)">Обновить (force)</button>
+    </div>
+    <div class="tw bez spot"><div class="core"><table id="scanTable"></table></div></div>
+    <section class="grp" id="advisorSec" hidden><div class="gh"><h3>ИИ-советник по выдаче</h3><span class="auto-tag manual">LLM</span></div>
+      <div class="bez spot"><div class="core eq-prose" id="advisor"></div></div>
+    </section>
+  </div>
+
+  <div id="emptyHint" class="eq-empty">
+    <p>Выбери тип скана и фильтры. Недооценённые: система опрашивает вселенную (~530 тикеров), отбирает кандидатов по прескрин-скору, потом гонит полный анализ по топу — с защитой от value-trap'ов и новостным карантином. Клик по тикеру откроет полный анализ.</p>
+    <p class="mut">Прескрин-данные кэшируются на 12 часов, результаты скана — на 30 минут. Полный скан занимает до получаса.</p>
+  </div>
+
+  <div class="foot">Вселенная — курируемый список ~530 ликвидных тикеров (11 секторов). Прескрин-скор, red flags и value-trap гард — по правилам; справедливая стоимость — детерминированный мульти-методный движок. Не является индивидуальной инвестиционной рекомендацией.</div>
+</main>
+
+<div id="toasts"></div>
+<script src="/auth.js"></script>
+<script src="/scanner.js"></script>
+</body></html>

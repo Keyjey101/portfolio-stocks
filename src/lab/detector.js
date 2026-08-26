@@ -73,6 +73,7 @@ const { fetchHeadlines } = require('../news');
 const { PROMPTS } = require('../prompts');
 const { edgarRecent } = require('../edgar');
 const defaultLlm = require('../llm');
+const theses = require('./theses');
 
 const DAY = 24 * 3600e3;
 const COOLDOWN = 7 * DAY;
@@ -91,19 +92,34 @@ const VERDICT_SCHEMA = {
   reason: 'string',
   pillar: 'string',
   confidence: 'number',
+  proposed_state: 'enum:intact,watch,damaged,dead',
 };
 
-async function attribute(t, flag, meta, llm) {
+async function attribute(t, flag, meta, thesis, llm) {
   const [news, filings] = await Promise.all([
     fetchHeadlines(t).catch(() => []),
     edgarRecent(t).catch(() => []),
   ]);
   const v = await llm.chat(
     [{ role: 'system', content: PROMPTS.detector.system },
-     { role: 'user', content: PROMPTS.detector.user({ t, meta, flag, news, filings }) }],
+     { role: 'user', content: PROMPTS.detector.user({ t, meta, thesis, flag, news, filings }) }],
     { schema: VERDICT_SCHEMA, task: 'detector', t, temperature: 0.2 },
   );
   return { ...v, news, filings };
+}
+
+// машина состояний: thesis_damage по confidence двигает тезис
+// (М1: >0.6 → damaged, 0.4–0.6 → watch), перевывод уровней — сразу за ним
+async function applyThesisEvent(t, v) {
+  if (v.verdict !== 'thesis_damage' || !(+v.confidence >= 0.4)) return null;
+  const { runDerive } = require('./derivation'); // лениво: без цикла на загрузке
+  const r = await theses.applyEvent(t, {
+    kind: +v.confidence > 0.6 ? 'damage_strong' : 'damage_weak',
+    source: 'detector', trigger: 'anomaly',
+    evidence: v.reason, pillar: v.pillar && v.pillar !== '—' ? v.pillar : null,
+    proposal: { state: v.proposed_state, note: v.reason },
+  }, { derive: runDerive });
+  return r;
 }
 
 let inflight = null;
@@ -139,8 +155,18 @@ async function runDetector({ force = false, positionsLoader = defaultPositions,
         continue;
       }
       try {
-        const v = await attribute(p.t, flags[p.t], p, llm); // p — слитая мета (дефолт + оверрайд агента)
+        const thesisRec = theses.get(p.t);
+        const v = await attribute(p.t, flags[p.t], p, thesisRec, llm); // p — слитая мета (дефолт + оверрайд агента)
         const rec = { t: p.t, ...flags[p.t], checkedAt: new Date().toISOString(), ...v };
+        // машина состояний (#М1): повреждение по confidence → watch/damaged
+        try {
+          const tr = await applyThesisEvent(p.t, v);
+          if (tr) rec.thesis = tr.transition
+            ? { from: tr.transition.from, to: tr.transition.to, ...(tr.derivation?.error ? { deriveError: tr.derivation.error } : {}) }
+            : { note: 'перехода не потребовалось' };
+        } catch (e) {
+          rec.thesis = { error: e.message };
+        }
         fs.writeFileSync(file, JSON.stringify(rec, null, 2));
         verdicts.push(rec);
         if (v.verdict === 'thesis_damage') appendRec({ kind: 'detector', t: p.t, verdict: v.verdict, reason: v.reason });

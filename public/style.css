@@ -501,6 +501,7 @@ svg .xh{stroke:var(--acc2);stroke-width:1;stroke-opacity:.6}
 
 /* ═══ Публичный/владельческий режим ═══ */
 body.guest #btnDecision{display:none}
+body.guest .owner-link{display:none}
 button.locked,.lab-btn.locked{opacity:.45;cursor:not-allowed;filter:grayscale(.35)}
 #authModal .dec-card{width:min(420px,92vw)}
 .dec-full input{border:1px solid var(--line2);border-radius:var(--r-k);padding:9px 12px;font:13px var(--mono);background:rgba(255,255,255,.85);color:var(--ink);outline:none}
@@ -508,3 +509,9 @@ button.locked,.lab-btn.locked{opacity:.45;cursor:not-allowed;filter:grayscale(.3
 #authErr{font:600 11px var(--mono);letter-spacing:.04em;min-height:14px}
 .guest-hint{color:var(--acc)}
 td.num.mut{color:var(--ink3)}
+
+/* ── М1: ручной переход состояния в таблице тезисов (/lab) ── */
+.th-manual{display:inline-flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.th-manual select{border:1px solid var(--line2);border-radius:var(--r-k);padding:5px 8px;font:11.5px var(--mono);background:rgba(255,255,255,.8);color:var(--ink);outline:none}
+.th-manual select:focus{border-color:rgba(143,106,30,.55)}
+@media (max-width:720px){.th-manual select{font-size:16px}}
