@@ -89,7 +89,12 @@ function canonicalMos(val, price) {
 
 // ── EQUITY-пайплайн (02 §2.1) ──
 async function runEquity(ds, fm, { fetchImpl, llm, onFrame, T }) {
-  const step = (name, status, data) => onFrame({ step: name, status, data: data || {} });
+  const t0 = Date.now();
+  const step = (name, status, data) => {
+    onFrame({ step: name, status, data: data || {} });
+    // структурный лог шагов в stderr → journalctl (наблюдаемость, 10 §9)
+    if (status === 'done') console.error(`[equity ${T}] ${name} · +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  };
   let degraded = 0;
 
   // 2. SEC EDGAR (мягкая деградация)
@@ -199,7 +204,11 @@ function cashflowAnalysis(ds, fm) {
 }
 
 async function runDividend(ds, fm, { fetchImpl, llm, onFrame, T }) {
-  const step = (name, status, data) => onFrame({ step: name, status, data: data || {} });
+  const t0 = Date.now();
+  const step = (name, status, data) => {
+    onFrame({ step: name, status, data: data || {} });
+    if (status === 'done') console.error(`[dividend ${T}] ${name} · +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  };
   let degraded = 0;
 
   step('cashflow', 'running');
@@ -384,12 +393,14 @@ function startAnalysis(ticker, opts = {}) {
       const { result, degraded } = await analyze(T, { ...opts, type, onFrame });
       if (degraded < 2) writeCache(cacheName, result); // ≥2 упавших — не кэшируем (08 §8.1)
       run.done = true;
+      console.error(`[${type} ${T}] готово за ${((Date.now() - run.startedAt) / 1000).toFixed(0)}s · вердикт ${result.decision?.verdict} · упало агентов ${degraded}`);
       return result;
     } catch (e) {
       const errFrame = { step: 'error', status: 'failed', data: { error: e.message, ticker: T } };
       run.frames.push(errFrame);
       for (const fn of run.subs) { try { fn(errFrame); } catch {} }
       run.done = true;
+      console.error(`[${type} ${T}] ПРОВАЛ: ${e.message}`);
       throw e;
     } finally {
       active.delete(T + ':' + type);

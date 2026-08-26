@@ -11,11 +11,17 @@
 <div class="amb" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
 <div class="grain" aria-hidden="true"></div>
 
-<header class="top"><div class="island">
-  <div class="mark">
+<header class="top"><div class="island lab-island">
+  <a class="mark" href="/" title="К терминалу">
     <span class="mtile"><svg viewBox="0 0 26 26" aria-hidden="true"><path d="M4.5 19 L10.5 11 L14.5 14.5 L21 6" fill="none" stroke="#8f6a1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-    <h1>Лаборатория</h1>
-  </div>
+  </a>
+  <nav class="lab-nav" aria-label="разделы">
+    <a href="#g-theses">Тезисы</a>
+    <a href="#g-portfolio">Портфель</a>
+    <a href="#g-future">Прогноз</a>
+    <a href="#g-agents">Агенты</a>
+    <a href="#g-decisions">Решения и рынок</a>
+  </nav>
   <span class="spacer"></span>
   <button class="iconbtn" id="btnAuth" title="Вход владельца" aria-label="Вход владельца"><span class="ic">
     <svg class="l" viewBox="0 0 24 24"><circle cx="8" cy="16" r="4"/><path d="M11 13 21 3M17.5 6.5 20 9M14.5 9.5l2 2"/></svg>
@@ -29,6 +35,7 @@
     <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
     <span class="ht">к терминалу</span>
   </a>
+  <nav class="lab-subnav" id="labSubnav" aria-label="подразделы"></nav>
 </div></header>
 
 <main class="wrap lab-wrap">
@@ -45,32 +52,25 @@
     <p class="hero-p mut">Цифры ниже — не прогнозы, а распределения и расчёты по эмпирике.</p>
   </div></section>
 
-  <!-- ═══ навигация ═══ -->
-  <nav class="lab-nav" aria-label="разделы">
-    <a href="#g-theses">Тезисы</a>
-    <a href="#g-portfolio">Портфель</a>
-    <a href="#g-future">Прогноз</a>
-    <a href="#g-agents">Агенты</a>
-    <a href="#g-decisions">Решения и рынок</a>
-  </nav>
+  <!-- ═══ навигация живёт в шапке (группы + подтемы активной секции) ═══ -->
 
   <!-- ═══ группа 0: тезисы (машина состояний) ═══ -->
   <div class="lgroup" id="g-theses">
     <div class="lg-title">Тезисы ведутся во времени <span class="lg-tag">переходы по правилам · LLM только по триггеру</span></div>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-th-machine"><div class="gh">
       <h3>Машина состояний тезисов</h3><span class="pct" id="thSub"></span><span class="auto-tag auto">авто + руки</span></div>
       <p class="sec-sub">Каждая позиция живёт в состоянии: <b>цел</b> → <b>наблюдение</b> (негатив без подтверждения) → <b>повреждён</b> (опора задета фактами, старые уровни аннулируются) → <b>восстановление</b> (условная покупка: цена + факт) → <b>мёртв</b> (только выход). Переходы делают правила по детектору, фальсификациям и отчётам; ручной переход требует обоснования и пишется в историю.</p>
       <div class="tw bez spot"><div class="core"><table id="thTable"></table></div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-th-queue"><div class="gh">
       <h3>Очередь пересмотров</h3><span class="pct" id="qSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Что и когда пересматривать: просроченные — красным наверх; дальше отчёты в ближайшую неделю, сработавшие фальсификации, зависшие damaged/watch. Наутро после каждого отчёта тезис переоценивается автоматически, уровни — за семь дней до отчёта замораживаются.</p>
       <div class="bez spot"><div class="core" id="qCard">Собираем очередь…</div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-th-buy"><div class="gh">
       <h3>Стоит ли покупать?</h3><span class="auto-tag manual">руками · LLM по запросу</span></div>
       <p class="sec-sub">Единая точка входа вместо внешнего аналитика: тикер + сумма → состояние тезиса, свежие события, классификация движения, уровни и условия, проверка мандата, близость отчёта, базовые ставки — и однозначное решение (или честное «нет решения: не хватает X»).</p>
       <div class="bez spot"><div class="core" id="bcCard">
@@ -86,13 +86,13 @@
   <div class="lgroup" id="g-portfolio">
     <div class="lg-title">Из чего на самом деле состоит портфель <span class="lg-tag">считается само · ежедневно</span></div>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-enb"><div class="gh">
       <h3>Сколько у тебя независимых ставок</h3><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">33 позиции — это не 33 ставки. Многие движутся вместе, как одно целое. Здесь — честное число независимых направлений.</p>
       <div class="bez spot"><div class="core" id="enbCard">Считаем факторную модель…</div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-expo"><div class="gh">
       <h3>К чему привязан портфель</h3><span class="pct" id="expSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Бета показывает: если этот сектор сдвинется на 1% — портфель сдвинется на столько-то процентов. Главная строка — «Портфель β». Ниже — то же после ортогонализации: секторы очищены от рынка, бета читается как «чувствительность сверх рыночной» (починено от артефактов мультиколлинеарности), с доверительными интервалами и R².</p>
       <details class="sec-details"><summary>показать таблицу по секторам</summary>
@@ -106,13 +106,13 @@
       </details>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-stress"><div class="gh">
       <h3>Что случается с защитой в плохой день</h3><span class="pct" id="stressSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">В дни, когда рынок падает сильнее 2%, «разные» активы часто начинают падать вместе. Здесь видно, чья защита в стрессе перестаёт работать (Δρ — насколько выросла связность с рынком).</p>
       <div class="tw bez spot"><div class="core"><table id="stressTable"></table></div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-levels"><div class="gh">
       <h3>Уровни докупа — реалистичны ли они</h3><span class="pct" id="levelsSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Для каждого твоего уровня: вероятность, что цена коснётся его за год. P&lt;5% — уровень-фантазия (ждать бесполезно). Уровни ближе одной годовой волатильности — фактически один уровень.</p>
       <div class="tw bez spot"><div class="core"><table id="levelsTable"></table></div></div>
@@ -123,7 +123,7 @@
   <div class="lgroup" id="g-future">
     <div class="lg-title">Что может случиться за 10 лет <span class="lg-tag">считается само · еженедельно</span></div>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-mc"><div class="gh">
       <h3>Монте-Карло: судьба портфеля в 10 000 вариантах</h3><span class="pct" id="mcSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Не «прогноз», а разброс исходов: 10 000 траекторий с твоими довнесениями $250/мес через спокойные и тревожные режимы рынка. Полоса — коридор исходов, линия посередине — медиана.</p>
       <div class="bez spot"><div class="core" id="mcCard">Считаем Монте-Карло…</div></div>
@@ -134,19 +134,19 @@
   <div class="lgroup" id="g-agents">
     <div class="lg-title">ИИ-агенты — работают за тобой <span class="lg-tag">расписание «экономно» · бюджет логируется</span></div>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-detector"><div class="gh">
       <h3>Детектор: рынок или поломка?</h3><span class="pct" id="detSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Когда бумага падает сильнее, чем объясняет её сектор (аномалия &gt;2,5σ), агент читает новости и отчёты и решает: это β-движение (всё нормально), разовый шум или повреждение тезиса. Если пусто — аномалий нет, это хорошо.</p>
       <div class="bez spot"><div class="core" id="detCard">Сканируем остатки…</div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-falsify"><div class="gh">
       <h3>Реестр фальсификаций</h3><span class="pct" id="falSub"></span><span class="auto-tag manual">руками</span></div>
       <p class="sec-sub">Тезис жив, пока не опровергнут. <b>Что делать:</b> впиши тикер позиции — агент сформулирует 3 конкретных условия, при которых тезис мёртв. Дальше он сам проверяет их раз в квартал по отчётам. Сработало условие — позицию пора закрывать или пересматривать.</p>
       <div class="bez spot"><div class="core" id="falCard">Загружаем реестр…</div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-committee"><div class="gh">
       <h3>Комитет и его точность</h3><span class="pct" id="comSub"></span><span class="auto-tag auto">авто · кнопка</span></div>
       <p class="sec-sub">Четыре агента (бык, медведь, адвокат дьявола, базовые ставки) дают прогнозы с вероятностями. Когда прогнозы «созревают», каждый получает счёт точности (Brier — меньше значит лучше). Через пару месяцев станет видно, кого слушать. Кнопки ниже — если не хочется ждать недельного расписания.</p>
       <div class="bez spot"><div class="core" id="comCard">Загружаем комитет…</div></div>
@@ -157,19 +157,19 @@
   <div class="lgroup" id="g-decisions">
     <div class="lg-title">Твои решения и рыночная обстановка <span class="lg-tag">журнал пополняется сам · разбор еженедельно</span></div>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-journal"><div class="gh">
       <h3>Журнал: помогли ли твои решения</h3><span class="pct" id="cfSub"></span><span class="auto-tag semi">сделки — сами</span></div>
       <p class="sec-sub">Кнопка «Записать решение» — в футере главного терминала; сделки из брокера подхватываются сами (раз в 15 минут спросит «объяснить?»). Через 30 дней после каждого решения здесь появится сравнение: твой выбор против «просто держать» и против равновесного вотчлиста.</p>
       <div class="tw bez spot"><div class="core"><table id="cfTable"></table></div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-baserates"><div class="gh">
       <h3>Базовые ставки: что бывает после таких событий</h3><span class="pct" id="brSub"></span><span class="auto-tag manual">одна кнопка</span></div>
       <p class="sec-sub">Ты описываешь ситуацию («срез гайденса дважды + инсайдеры покупают») — система отвечает, что <i>обычно</i> происходило с акциями S&amp;P 500 после похожего. Эмпирика и мнение модели показываются раздельно и помечены.</p>
       <div class="bez spot"><div class="core" id="brCard">Загружаем…</div></div>
     </section>
 
-    <section class="grp"><div class="gh">
+    <section class="grp" id="s-capcycle"><div class="gh">
       <h3>Капитальный цикл AI: где мы</h3><span class="pct" id="ccSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Стадия AI-строительства по рыночным рядам (полупроводники, уран, оборудование против рынка) и фактическому капексу гиперскейлеров из их отчётов SEC. «Kill-switch 2 из 3» — предупреждение, что цикл разворачивается. Если знаешь текущую цену аренды GPU — впиши её, она дополнит картину.</p>
       <div class="bez spot"><div class="core" id="ccCard">Загружаем…</div></div>

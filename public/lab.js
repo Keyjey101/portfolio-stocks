@@ -499,8 +499,8 @@ function renderTheses(D){
     var lv=r.levels;
     var lvStr=lv?('T1 '+n2(lv.t1)+' · T2 '+n2(lv.t2)+' · T3 '+n2(lv.t3)+(lv.conditional?' <i class="mut">(условные)</i>':'')+(lv.until?' <i class="oc">ждёт: '+esc(lv.until.event)+'</i>':'')):'<span class="mut">аннулированы</span>';
     var exit=r.exit_plan&&r.state==='dead'?'<div class="dn">выход: цель '+(r.exit_plan.target!=null?'$'+n2(r.exit_plan.target):'отскок')+' к '+esc(r.exit_plan.deadline||'—')+'</div>':'';
-    var rev=r.review?('к '+r.review.due.slice(8,10)+'.'+r.review.due.slice(5,7)+(r.review.reason?' · '+esc(r.review.reason):'')):'—';
-    var revCls=q.queue&&q.queue.some(function(x){return x.t===r.t&&x.priority===0})?' class="dn"':'';
+    var rev=r.review?('к '+r.review.due.slice(8,10)+'.'+r.review.due.slice(5,7)+(r.review.reason?'<span class="rr">'+esc(r.review.reason)+'</span>':'')):'—';
+    var revCls=q.queue&&q.queue.some(function(x){return x.t===r.t&&x.priority===0})?' class="nt wr th-rev dn"':' class="nt wr th-rev"';
     var last=r.history&&r.history.length?r.history[r.history.length-1]:null;
     var hist=last?fmtDate10(last.date)+': '+(last.from?last.from+' → ':'')+last.to+' ('+esc(last.trigger)+')':'';
     var prop=r.proposed&&r.proposed.state&&r.proposed.state!==r.state?' <i class="mut" title="'+esc(r.proposed.note||'')+'">мнение агента: '+r.proposed.state+'</i>':'';
@@ -508,12 +508,12 @@ function renderTheses(D){
       +'<td><span class="pill '+sm[1]+'">'+sm[0]+'</span>'+prop+'</td>'
       +'<td class="nt">'+esc(r.thesis||'—')+(r.damaged_pillars&&r.damaged_pillars.length?'<div class="dn">задето: '+esc(r.damaged_pillars.join(', '))+'</div>':'')+'</td>'
       +'<td class="nt">'+lvStr+exit+'</td>'
-      +'<td class="nt"'+revCls+'>'+rev+'</td>'
-      +'<td class="nt mut">'+hist+'</td>'
-      +'<td class="nt"><button class="lab-btn" data-th-derive="'+r.t+'">Перевывести уровни</button>'
+      +'<td'+revCls+'>'+rev+'</td>'
+      +'<td class="nt th-hist mut">'+hist+'</td>'
+      +'<td class="nt th-act"><button class="lab-btn sm" data-th-derive="'+r.t+'">Перевывести уровни</button>'
       +'<div class="th-manual"><select data-th-to="'+r.t+'">'
       +Object.keys(STATE_META).map(function(s){return '<option value="'+s+'"'+(s===r.state?' selected':'')+'>'+STATE_META[s][0]+'</option>'}).join('')
-      +'</select><button class="lab-btn" data-th-manual="'+r.t+'">Перевести</button></div></td></tr>';
+      +'</select><button class="lab-btn sm" data-th-manual="'+r.t+'">Перевести</button></div></td></tr>';
   }).join('');
   $('#thTable').innerHTML='<thead><tr><th>Тикер</th><th>Состояние</th><th>Тезис / опоры</th><th>Уровни</th><th>Пересмотр</th><th>Последний переход</th><th>Действия</th></tr></thead><tbody>'+rows+'</tbody>';
   hookTheses();
@@ -617,3 +617,56 @@ function hookBuyCheck(){
   lockGuest(go);
 }
 hookBuyCheck();
+
+/* ═══════════════════════════════════════════════════════════════
+   Навигация: скролл-спай групп + строка подтем активной секции.
+   Главные ссылки гаснут (opacity .6), активная — бронза с полоской;
+   под ней в том же лотке появляется поднавигация текущей секции.
+   ═══════════════════════════════════════════════════════════════ */
+var SUBS={
+  'g-theses':[['s-th-machine','машина состояний'],['s-th-queue','очередь пересмотров'],['s-th-buy','стоит ли покупать?']],
+  'g-portfolio':[['s-enb','независимые ставки'],['s-expo','экспозиции'],['s-stress','стресс-тест связности'],['s-levels','уровни докупа']],
+  'g-future':[['s-mc','монте-карло']],
+  'g-agents':[['s-detector','детектор'],['s-falsify','реестр фальсификаций'],['s-committee','комитет']],
+  'g-decisions':[['s-journal','журнал решений'],['s-baserates','базовые ставки'],['s-capcycle','капитальный цикл AI']]
+};
+var curGroup=null, curSubId=null;
+function markSub(){
+  $$('#labSubnav a').forEach(function(a){a.classList.toggle('on',a.getAttribute('href')==='#'+curSubId)});
+}
+function showSub(g){
+  if(g===curGroup)return;
+  curGroup=g;
+  var subs=SUBS[g]||[], el=$('#labSubnav');
+  el.innerHTML=subs.length
+    ?'<span class="sub-cap">в разделе</span>'
+      +subs.map(function(s){return '<a href="#'+s[0]+'">'+esc(s[1])+'</a>'}).join('')
+    :'';
+  el.classList.remove('fade');void el.offsetWidth;el.classList.add('fade');
+  markSub();
+  setHH(); /* высота острова изменилась — липкие thead отталкиваются от --hh */
+}
+function showGroup(g){
+  $$('.lab-nav a').forEach(function(a){a.classList.toggle('on',a.getAttribute('href')==='#'+g)});
+  showSub(g);
+}
+/* секция считается активной, когда пересекает верхнюю треть экрана */
+var spyGroup=new IntersectionObserver(function(es){
+  es.forEach(function(e){if(e.isIntersecting)showGroup(e.target.id)});
+},{rootMargin:'-22% 0px -65% 0px'});
+$$('.lgroup').forEach(function(g){if(g.id)spyGroup.observe(g)});
+var spySub=new IntersectionObserver(function(es){
+  es.forEach(function(e){
+    if(e.isIntersecting){curSubId=e.target.id;markSub()}
+  });
+},{rootMargin:'-18% 0px -70% 0px'});
+Object.keys(SUBS).forEach(function(g){
+  SUBS[g].forEach(function(s){var el=document.getElementById(s[0]);if(el)spySub.observe(el)});
+});
+/* клик по группе сразу подсвечивает её (не ждём скролла) */
+$$('.lab-nav a').forEach(function(a){
+  a.addEventListener('click',function(){
+    showGroup(a.getAttribute('href').slice(1));
+    curSubId=null;markSub();
+  });
+});

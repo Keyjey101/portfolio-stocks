@@ -421,6 +421,7 @@ function startScan(rawParams, { fetchImpl = fetch, llm = null } = {}) {
   };
   tasks.set(id, task);
   persist(task);
+  console.error(`[scan ${id}] запуск: ${params.scanType} · сектор ${params.sector || 'все'} · cap ${params.marketCapTier} · объём ${params.volumeTier} · topN ${params.topN}`);
   const estimated = params.scanType === 'undervalued' ? params.topN * 30 : 120;
   runScan(task, { fetchImpl, llm }).catch(e => {
     task.status = 'failed';
@@ -428,6 +429,13 @@ function startScan(rawParams, { fetchImpl = fetch, llm = null } = {}) {
     persist(task);
   });
   return { scanId: id, cached: false, estimatedSeconds: estimated, params };
+}
+
+// фаза скана с логом в stderr (наблюдаемость, 10 §9)
+function setPhase(task, name) {
+  task.progress.phase = name;
+  console.error(`[scan ${task.id}] фаза: ${name} · fetched ${task.progress.fetched}/${task.progress.universeSize} · фильтр ${task.progress.prescreened} · глубоко ${task.progress.analyzed}/${task.progress.total || '?'} · ошибок ${task.progress.failed}`);
+  persist(task);
 }
 
 // ── сам скан ──
@@ -473,8 +481,7 @@ async function runScan(task, { fetchImpl, llm }) {
       valueTrap: { warning: (x.q.dividend_yield ?? 0) >= 0.08 && (x.q.payout_ratio ?? 0) > 0.8, reason: (x.q.dividend_yield ?? 0) >= 0.08 && (x.q.payout_ratio ?? 0) > 0.8 ? 'Высокий yield с большим payout — проверь устойчивость' : null },
       newsRadar: { level: 'none', summary: null, items: [] },
     }));
-    task.progress.phase = 'advisor';
-    persist(task);
+    setPhase(task, 'advisor');
     let advisorText = '';
     if (llm) advisorText = await agents.advisor(rows, 'dividend', clusterWarning(rows), { llm }).catch(() => '');
     const uiRows = rows.map(toUiRow);
@@ -485,17 +492,18 @@ async function runScan(task, { fetchImpl, llm }) {
     task.progress.phase = 'done';
     writeCache(scanCacheKey(p), { results: uiRows, advisor: advisorText, stats: stats(rows, p.topN, 0) });
     persist(task);
+    console.error(`[scan ${task.id}] готово (dividend): ${uiRows.length} строк · ${((Date.now() - task.created_at) / 1000).toFixed(0)}s`);
     return;
   }
 
   // ── фаза 2: обогащение (последовательно на тикер, 06 §6.5) ──
   const pool2 = passed.slice(0, Math.min(p.topN + 10, passed.length));
   task.progress.total = pool2.length;
-  task.progress.phase = 'deep_analysis';
-  persist(task);
+  setPhase(task, 'deep_analysis');
 
   const enriched = [];
   let failed = 0;
+  console.error(`[scan ${task.id}] глубокий анализ: ${pool2.length} тикеров`);
   for (const cand of pool2) {
     const q = cand.q;
     try {
@@ -559,14 +567,14 @@ async function runScan(task, { fetchImpl, llm }) {
     } catch (e) {
       failed++;
       task.progress.failed = failed;
+      console.error(`[scan ${task.id}] ${q.ticker}: ${e.message}`);
     }
     task.progress.analyzed++;
     if (task.progress.analyzed % 3 === 0) persist(task);
   }
 
   // ── фаза 3: news radar по обогащённому пулу (06 §6.6) ──
-  task.progress.phase = 'news_radar';
-  persist(task);
+  setPhase(task, 'news_radar');
   let newsDone = 0;
   await pool(enriched, async row => {
     try {
@@ -594,12 +602,10 @@ async function runScan(task, { fetchImpl, llm }) {
   }, 3);
 
   // ── постфильтр, ранжирование, статистика ──
-  task.progress.phase = 'ranking';
-  persist(task);
+  setPhase(task, 'ranking');
   const ranked = postfilterAndRank(enriched, p.topN);
 
-  task.progress.phase = 'advisor';
-  persist(task);
+  setPhase(task, 'advisor');
   let advisorText = '';
   if (llm && ranked.length) {
     advisorText = await agents.advisor(ranked, 'undervalued', clusterWarning(ranked), { llm }).catch(() => '');
@@ -613,6 +619,7 @@ async function runScan(task, { fetchImpl, llm }) {
   task.progress.phase = 'done';
   writeCache(scanCacheKey(p), { results: uiRows, advisor: advisorText, stats: stats(ranked, p.topN, failed) });
   persist(task);
+  console.error(`[scan ${task.id}] готово: ${uiRows.length} строк · ошибок ${failed} · ${((Date.now() - task.created_at) / 1000).toFixed(0)}s`);
 }
 
 // канонический пересчёт MoS по dcf_base (тот же принцип, что в оркестраторе)

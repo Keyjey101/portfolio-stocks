@@ -165,6 +165,7 @@ async function handle(req, res) {
     const type = req.url.includes('type=dividend') ? 'dividend' : 'equity';
     const force = /[?&]force=1|[?&]force=true/.test(req.url);
     const started = equity.startAnalysis(ticker, { type, force });
+    console.error(`[equity] stream ${ticker} (${type}${force ? ', force' : ''}) — ${started.fromCache ? 'из кэша' : 'запуск прогона'}`);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -219,6 +220,7 @@ async function handle(req, res) {
     try {
       const b = await readBody(req);
       const out = scanner.startScan({ ...b, force: !!b.force });
+      console.error(`[scan] старт запрос: ${out.scanId}${out.cached ? ' (из кэша)' : ''}`);
       json(res, 202, { data: { scanId: out.scanId, scanType: out.params.scanType, estimatedSeconds: out.estimatedSeconds, cached: !!out.cached } });
     } catch (e) { eqDenied(500, e.message); }
     return;
