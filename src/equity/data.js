@@ -7,6 +7,7 @@
 const { yahooAuth, chart } = require('../yahoo');
 const { fetchHeadlines } = require('../news');
 const { readCache, writeCache } = require('../cache');
+const log = require('../log');
 
 const UA = { 'User-Agent': 'Mozilla/5.0' };
 const HOUR = 3600e3;
@@ -24,7 +25,7 @@ async function fetchJson(url, { fetchImpl = fetch, headers = UA, timeoutMs = 150
     if (attempt) await sleep(2000);
     try {
       const r = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
-      if (r.status === 429) { pausedUntil = Date.now() + 60e3; throw new Error('yahoo: HTTP 429'); }
+      if (r.status === 429) { pausedUntil = Date.now() + 60e3; log.warn('yahoo', 'HTTP 429 — глобальная пауза 60 с'); throw new Error('yahoo: HTTP 429'); }
       if (!r.ok) throw new Error(`yahoo: HTTP ${r.status}`);
       return await r.json();
     } catch (e) {
@@ -308,7 +309,7 @@ async function dividendHistory(ticker, { fetchImpl } = {}) {
       byYear.set(y, (byYear.get(y) || 0) + ev.amount);
     }
     return [...byYear.entries()].sort((a, b) => b[0] - a[0]).map(([year, dps]) => ({ year, dps }));
-  } catch { return []; }
+  } catch (e) { log.warn(`yahoo dividends ${ticker}`, e); return []; }
 }
 
 // ── FX-нормализация (ADR/иностр. валюта, спека 02 §2.2) ──
@@ -318,7 +319,7 @@ async function fxRate(from, to, { fetchImpl } = {}) {
     const c = await chart(`${from}${to}=X`, '5d', { fetchImpl });
     const last = c.closes && c.closes.length ? c.closes.at(-1) : null;
     return Number.isFinite(last) && last > 0 ? last : 1;
-  } catch { return 1; }
+  } catch (e) { log.warn(`yahoo fx ${from}${to}=X`, e); return 1; }
 }
 
 const MONEY_KEYS = new Set(['revenue', 'gross_profit', 'operating_income', 'net_income', 'ebitda',
@@ -332,7 +333,8 @@ async function fetchFull(ticker, { fetchImpl = fetch, withNews = true } = {}) {
   const quick = quickFromSummary(T, q);
 
   let annual = statementsFromSummary(q);
-  try { annual = mergeAnnuals(annual, await timeseriesAnnuals(T, { fetchImpl })); } catch { /* расширенные ряды опциональны */ }
+  try { annual = mergeAnnuals(annual, await timeseriesAnnuals(T, { fetchImpl })); }
+  catch (e) { log.warn(`yahoo timeseries ${T} (расширенные ряды опциональны)`, e); }
 
   // FX-нормализация: отчётность в иной валюте, чем котировка
   let fx = 1, currency_normalized = false;

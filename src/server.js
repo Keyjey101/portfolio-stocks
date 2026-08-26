@@ -30,6 +30,7 @@ const { getMacro } = require('./fred');
 const equity = require('./equity/orchestrator');
 const scanner = require('./equity/scanner');
 const { SECTORS } = require('./equity/universe');
+const log = require('./log');
 
 const PORT = +(process.env.PORT || 3000);
 const API_PORT = +(process.env.API_PORT || 0); // задан и ≠ PORT — поднимаем второй сервер под nginx /api/
@@ -125,7 +126,7 @@ async function handle(req, res) {
       const ok = auth.login(clientIp(req), b.password, res, { secure });
       if (ok) json(res, 200, { ok: true, owner: true });
       else json(res, 403, { ok: false, error: 'неверный пароль или слишком много попыток — попробуй через несколько минут' });
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
   if (url === '/api/logout' && req.method === 'POST') {
@@ -245,7 +246,7 @@ async function handle(req, res) {
     try {
       const force = owner && req.url.includes('force=1');
       json(res, 200, await getMacro({ force }));
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -255,7 +256,7 @@ async function handle(req, res) {
       const force = req.url.includes('force=1');
       const D = await runFactors({ force });
       json(res, 200, D);
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { error: e.message }); }
     return;
   }
 
@@ -270,7 +271,7 @@ async function handle(req, res) {
       } else {
         json(res, 200, D);
       }
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { error: e.message }); }
     return;
   }
 
@@ -281,7 +282,7 @@ async function handle(req, res) {
       const force = req.url.includes('force=1');
       const D = await runMC({ force });
       json(res, 200, D);
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { error: e.message }); }
     return;
   }
 
@@ -292,7 +293,7 @@ async function handle(req, res) {
       const force = req.url.includes('force=1');
       const D = await runDetector({ force });
       json(res, 200, D);
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { error: e.message }); }
     return;
   }
 
@@ -352,7 +353,7 @@ async function handle(req, res) {
         ? await readBody(req).then(b => { journal.addDecision(b); return { ok: true }; })
         : { ok: true, decisions: journal.listDecisions() };
       json(res, 200, payload);
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -367,7 +368,7 @@ async function handle(req, res) {
       const b = await readBody(req);
       const ok = journal.resolvePending(b.id, b.decision);
       json(res, 200, { ok });
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -377,7 +378,7 @@ async function handle(req, res) {
       const { readCache } = require('./cache');
       const D = readCache('counterfactuals', 6 * 3600e3) || { items: [], advice: null };
       json(res, 200, { ok: true, ...D });
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -393,7 +394,7 @@ async function handle(req, res) {
         payload = { ok: true, data: baserates.getAggregates() };
       }
       json(res, 200, payload);
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -418,7 +419,7 @@ async function handle(req, res) {
           queue: await queueView({ calendarLoader: getCalendar }),
         });
       }
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -428,7 +429,7 @@ async function handle(req, res) {
     try {
       const P = await mandate.runMandate();
       json(res, 200, { ok: true, panel: owner ? P : mandate.sanitizePanel(P) });
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -438,7 +439,7 @@ async function handle(req, res) {
       const b = await readBody(req);
       const out = await runBuyCheck({ t: b.t, usd: b.usd });
       json(res, 200, { ok: true, result: out });
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -459,7 +460,7 @@ async function handle(req, res) {
         payload = { ok: true, data: await capcycle.runCapcycle({ force }) };
       }
       json(res, 200, payload);
-    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
@@ -479,7 +480,7 @@ async function handle(req, res) {
     try {
       const D = await getData();
       json(res, 200, owner ? D : sanitizeForGuest(D));
-    } catch (e) { json(res, 500, { error: e.message }); }
+    } catch (e) { log.err(`api ${req.method} ${url}`, e); json(res, 500, { error: e.message }); }
     return;
   }
 

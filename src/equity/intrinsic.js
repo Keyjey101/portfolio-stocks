@@ -68,7 +68,7 @@ function normalizeEarnings(ds, fm, tax = 0.21) {
   const mEbit = normMargin(d.operating_income, d.revenue);
   const mEbitda = normMargin(d.ebitda, d.revenue);
   const revNow = d.revenue?.[0] ?? null;
-  const revCyc = cyc ? median(pos(d.revenue.slice(0, win))) : revNow;
+  const revCyc = cyc ? median(pos((d.revenue || []).slice(0, win))) : revNow;
 
   let norm_ebit = mEbit != null && revNow != null ? mEbit * (cyc ? revCyc : revNow) : null;
   let norm_ebitda = mEbitda != null && revNow != null ? mEbitda * (cyc ? revCyc : revNow) : null;

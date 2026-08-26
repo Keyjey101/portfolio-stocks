@@ -5,6 +5,7 @@
 
 const { loadEnv } = require('../env');
 const { newsRadar } = require('./agents');
+const log = require('../log');
 
 const UA = { 'User-Agent': 'Mozilla/5.0' };
 const NEG_RE = /fraud|lawsuit|class action|investigation|probe|short seller|short report|\bSEC\b|subpoena|recall|downgrade|guidance cut|restat|default|bankrupt|scandal|resign|layoff|delist|misses|plunge|tumble|sink|slide|falls|drop/i;
@@ -61,8 +62,10 @@ function heuristicLevel(n) {
 async function fetchNegativeNews(ticker, companyName, { fetchImpl = fetch, llm = null } = {}) {
   const T = String(ticker).toUpperCase();
   let hits = [];
-  try { hits = hits.concat(await fetchYahooNegative(T, { fetchImpl })); } catch { /* RSS мог умереть */ }
-  try { hits = hits.concat(await fetchNewsApiNegative(companyName, T, { fetchImpl })); } catch { /* NewsAPI опционален */ }
+  try { hits = hits.concat(await fetchYahooNegative(T, { fetchImpl })); }
+  catch (e) { log.warn(`news RSS ${T}`, e); }
+  try { hits = hits.concat(await fetchNewsApiNegative(companyName, T, { fetchImpl })); }
+  catch (e) { log.warn(`news NewsAPI ${T} (опционален)`, e); }
   hits = dedup(hits);
 
   if (!hits.length) {
@@ -70,7 +73,8 @@ async function fetchNegativeNews(ticker, companyName, { fetchImpl = fetch, llm =
   }
 
   if (llm) {
-    const out = await newsRadar(T, companyName, hits, { llm }).catch(() => null);
+    const out = await newsRadar(T, companyName, hits, { llm })
+      .catch(e => { log.warn(`news LLM-классификация ${T} (эвристика)`, e); return null; });
     if (out) {
       // гард: elevated/severe без событий → понижаем (спека §2.4)
       if (['elevated', 'severe'].includes(out.risk_level) && !(out.events || []).length) {

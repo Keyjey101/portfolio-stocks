@@ -18,6 +18,7 @@ const { fetchNegativeNews } = require('./newsradar');
 const { marketSentiment } = require('./sentiment');
 const agents = require('./agents');
 const { PEERS_MAP, universe, SECTOR_OF_BASKET } = require('./universe');
+const log = require('../log');
 
 const HOUR = 3600e3;
 
@@ -71,7 +72,7 @@ async function gatherPeers(ds, manualPeers, { fetchImpl } = {}) {
         pe_trailing: q.pe_trailing, pe_forward: q.pe_forward, ev_ebitda: q.ev_ebitda,
         revenue_growth: q.revenue_growth, roe: q.roe, operating_margin: q.operating_margin,
       });
-    } catch { /* пир не загрузился — не страшно */ }
+    } catch (e) { log.warn(`eq-peers ${p}`, e); }
   }
   return { peers: rows.map(r => r.ticker), peers_comparison: rows };
 }
@@ -102,7 +103,7 @@ async function runEquity(ds, fm, { fetchImpl, llm, onFrame, T }) {
   let sec = { data_available: false };
   try {
     sec = await fetchSecData(T, { fetchImpl, llm });
-  } catch { sec = { ticker: T, data_available: false }; }
+  } catch (e) { log.warn(`eq ${T} sec_filing`, e); sec = { ticker: T, data_available: false }; }
   step('sec_filing', 'done', {
     revenue_change: sec.revenue_change_pct, margin: sec.operating_margin,
     insider_signal: sec.recent_form4?.activity_signal || 'none',
@@ -114,7 +115,7 @@ async function runEquity(ds, fm, { fetchImpl, llm, onFrame, T }) {
   let news = { risk_level: 'unknown', events: [], summary: null };
   try {
     news = await fetchNegativeNews(T, ds.meta.name, { fetchImpl, llm });
-  } catch { /* фоллбек из спеки */ }
+  } catch (e) { log.warn(`eq ${T} news_radar`, e); }
   const lastFilingTs = Math.max(
     sec.last_10k_date ? Date.parse(sec.last_10k_date) : 0,
     sec.last_10q_date ? Date.parse(sec.last_10q_date) : 0,
@@ -400,7 +401,7 @@ function startAnalysis(ticker, opts = {}) {
       run.frames.push(errFrame);
       for (const fn of run.subs) { try { fn(errFrame); } catch {} }
       run.done = true;
-      console.error(`[${type} ${T}] ПРОВАЛ: ${e.message}`);
+      log.err(`${type} ${T} ПРОВАЛ`, e);
       throw e;
     } finally {
       active.delete(T + ':' + type);

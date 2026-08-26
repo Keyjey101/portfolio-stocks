@@ -140,3 +140,13 @@ test('robustAggregate: выброс получает затухающий вес
   const agg = iv.robustAggregate(methods, weights);
   assert.ok(agg.base > 90 && agg.base < 105, `выброс Грэма не утащил якорь: ${agg.base}`);
 });
+
+test('пустые fundamentals у цикличного тикера — не краш, а no_estimate (регрессия AVGO)', () => {
+  // Yahoo fundamentals не ответил с IP дата-центра: annual-стейтментов нет,
+  // derived = {year:[]} без ряда revenue; цикличность определена по сектору.
+  // Раньше: TypeError: Cannot read properties of undefined (reading 'slice').
+  const ds = mkDs();
+  ds.derived = { year: [] };
+  const val = iv.compute(ds, mkFm({ is_cyclical: true, is_highly_cyclical: true }));
+  assert.ok(val.no_estimate, 'нет надёжной оценки вместо TypeError');
+});

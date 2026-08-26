@@ -7,6 +7,7 @@
 
 const { PROMPTS } = require('../prompts');
 const llmClient = require('../llm');
+const log = require('../log');
 
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const i01 = (v, dflt = 0.5) => (Number.isFinite(+v) ? clamp(+v, 0, 1) : dflt);
@@ -55,6 +56,7 @@ async function businessAgent(ds, fm, { llm } = {}) {
     };
   } catch (e) {
     // 1 retry на уровне оркестратора не делаем: chat() уже ретраит внутри
+    log.warn(`eq-agent business ${ds.meta?.ticker}`, e);
     return { ...businessFallback(), _error: e.message };
   }
 }
@@ -117,6 +119,7 @@ async function riskAgent(ctx, { llm } = {}) {
       _fallback: false,
     };
   } catch (e) {
+    log.warn('eq-agent risk', e);
     return { ...riskFallback(), _error: e.message };
   }
 }
@@ -166,7 +169,8 @@ async function selfCritique(ctx, { llm } = {}) {
       missed_risks: strs(out.missed_risks, 3),
       final_assessment: ['proceed', 'caution', 'strong_caution'].includes(out.final_assessment) ? out.final_assessment : 'proceed',
     };
-  } catch {
+  } catch (e) {
+    log.warn(`eq-agent selfCritique ${ctx.t}`, e);
     return { bear_case: '', confidence_adjustment: 0, missed_risks: [], final_assessment: 'proceed', _fallback: true };
   }
 }
@@ -178,7 +182,8 @@ async function advisor(rows, scanType, clusterText, { llm } = {}) {
       summary: 'string',
     }, { llm, temperature: 0.7, task: 'eqAdvisor' });
     return String(out.summary || '');
-  } catch {
+  } catch (e) {
+    log.warn('eq-agent advisor', e);
     return '';
   }
 }
@@ -194,7 +199,8 @@ async function divQuality(ds, fm, { llm } = {}) {
       growth_sustainability: i010(out.growth_sustainability), notes: String(out.notes || ''),
       _fallback: false,
     };
-  } catch {
+  } catch (e) {
+    log.warn(`eq-agent divQuality ${ds.meta?.ticker}`, e);
     return { dividend_type: 'none', dividend_safety: 5, growth_sustainability: 5, notes: 'Анализ временно недоступен.', _fallback: true };
   }
 }
@@ -211,7 +217,8 @@ async function divRisk(ds, fm, quality, { llm } = {}) {
       rationale: String(out.rationale || ''),
       _fallback: false,
     };
-  } catch {
+  } catch (e) {
+    log.warn(`eq-agent divRisk ${ds.meta?.ticker}`, e);
     return { cut_risk_pct: 50, yield_trap_probability: 50, primary_risk_type: 'неизвестен', rationale: 'Анализ временно недоступен.', _fallback: true };
   }
 }
@@ -229,7 +236,8 @@ async function divValuation(ds, fm, { llm } = {}) {
       rationale: String(out.rationale || ''),
       _fallback: false,
     };
-  } catch {
+  } catch (e) {
+    log.warn(`eq-agent divValuation ${ds.meta?.ticker}`, e);
     const y = ds.dividend_data?.yield || 0;
     return { yield_on_cost_3y: +y.toFixed(4), yield_on_cost_5y: +y.toFixed(4), expected_dps_growth_rate: 0, total_return_estimate: +y.toFixed(4), rationale: 'Анализ временно недоступен.', _fallback: true };
   }
@@ -245,7 +253,8 @@ async function divPortfolio(ds, fm, quality, risk, valuation, { llm } = {}) {
       allocation_rationale: String(out.allocation_rationale || ''),
       _fallback: false,
     };
-  } catch {
+  } catch (e) {
+    log.warn(`eq-agent divPortfolio ${ds.meta?.ticker}`, e);
     return { portfolio_role: 'supplemental_income', suggested_allocation_pct: 0, allocation_rationale: 'Анализ временно недоступен.', _fallback: true };
   }
 }

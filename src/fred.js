@@ -4,6 +4,7 @@
 
 const { readCache, writeCache } = require('./cache');
 const { loadEnv } = require('./env');
+const log = require('./log');
 
 const TTL = 12 * 3600e3;
 
@@ -43,7 +44,8 @@ async function getMacro({ fetchImpl = fetch, force = false } = {}) {
   const items = [];
   for (const s of SERIES) {
     // один сбой ряда не должен ронять всю полосу
-    try { items.push(await fetchSeries(s, key, { fetchImpl })); } catch { /* пропускаем ряд */ }
+    try { items.push(await fetchSeries(s, key, { fetchImpl })); }
+    catch (e) { log.warn(`fred ряд ${s.id} пропущен`, e); }
   }
   if (!items.length) throw new Error('FRED: ни один ряд не загрузился');
   const data = { generatedAt: new Date().toISOString(), items };

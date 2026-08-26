@@ -3,6 +3,7 @@
 const { positions, posSource, watchlist, CASH, RULES } = require('./portfolio');
 const { chart, sma, spark, pool, earningsDate } = require('./yahoo');
 const { rulesCheck, overdueDays } = require('./rules');
+const log = require('./log');
 
 // '2026-08-06' → '06.08'
 const fmtRu = d => typeof d === 'string' ? d.slice(8, 10) + '.' + d.slice(5, 7) : '';
@@ -179,7 +180,7 @@ async function build() {
       const d = await chart(w.t, '3mo');
       const px = d.price;
       return { ...w, px, day: d.prevClose ? (px / d.prevClose - 1) * 100 : null, lvl: watchStatus(px, w.lv), ok:true, sp: spark(d.closes) };
-    } catch { return { ...w, lvl: watchStatus(null, w.lv), ok:false }; }
+    } catch (e) { log.warn(`watch ${w.t} не загрузился`, e); return { ...w, lvl: watchStatus(null, w.lv), ok:false }; }
   });
 
   const total = rows.filter(r => r.ok).reduce((s, r) => s + r.val, 0);
