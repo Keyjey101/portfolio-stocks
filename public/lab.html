@@ -67,7 +67,7 @@
     <section class="grp" id="s-th-queue"><div class="gh">
       <h3>Очередь пересмотров</h3><span class="pct" id="qSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Что и когда пересматривать: просроченные — красным наверх; дальше отчёты в ближайшую неделю, сработавшие фальсификации, зависшие damaged/watch. Наутро после каждого отчёта тезис переоценивается автоматически, уровни — за семь дней до отчёта замораживаются.</p>
-      <div class="bez spot"><div class="core" id="qCard">Собираем очередь…</div></div>
+      <div class="bez spot"><div class="core" id="qCard"><div class="cs mut">Собираем очередь…</div><div class="skel-line" style="width:78%"></div><div class="skel-line" style="width:54%"></div></div></div>
     </section>
 
     <section class="grp" id="s-th-buy"><div class="gh">
@@ -89,7 +89,7 @@
     <section class="grp" id="s-enb"><div class="gh">
       <h3>Сколько у тебя независимых ставок</h3><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">33 позиции — это не 33 ставки. Многие движутся вместе, как одно целое. Здесь — честное число независимых направлений.</p>
-      <div class="bez spot"><div class="core" id="enbCard">Считаем факторную модель…</div></div>
+      <div class="bez spot"><div class="core" id="enbCard"><div class="cs mut">Считаем факторную модель…</div><div class="skel-line" style="width:86%"></div><div class="skel-line" style="width:62%"></div></div></div>
     </section>
 
     <section class="grp" id="s-expo"><div class="gh">
@@ -126,7 +126,7 @@
     <section class="grp" id="s-mc"><div class="gh">
       <h3>Монте-Карло: судьба портфеля в 10 000 вариантах</h3><span class="pct" id="mcSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Не «прогноз», а разброс исходов: 10 000 траекторий с твоими довнесениями $250/мес через спокойные и тревожные режимы рынка. Полоса — коридор исходов, линия посередине — медиана.</p>
-      <div class="bez spot"><div class="core" id="mcCard">Считаем Монте-Карло…</div></div>
+      <div class="bez spot"><div class="core" id="mcCard"><div class="cs mut">Считаем Монте-Карло…</div><div class="skel-line" style="width:82%"></div><div class="skel-line" style="width:58%"></div></div></div>
     </section>
   </div>
 
@@ -137,19 +137,19 @@
     <section class="grp" id="s-detector"><div class="gh">
       <h3>Детектор: рынок или поломка?</h3><span class="pct" id="detSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Когда бумага падает сильнее, чем объясняет её сектор (аномалия &gt;2,5σ), агент читает новости и отчёты и решает: это β-движение (всё нормально), разовый шум или повреждение тезиса. Если пусто — аномалий нет, это хорошо.</p>
-      <div class="bez spot"><div class="core" id="detCard">Сканируем остатки…</div></div>
+      <div class="bez spot"><div class="core" id="detCard"><div class="cs mut">Сканируем остатки…</div><div class="skel-line" style="width:80%"></div><div class="skel-line" style="width:52%"></div></div></div>
     </section>
 
     <section class="grp" id="s-falsify"><div class="gh">
       <h3>Реестр фальсификаций</h3><span class="pct" id="falSub"></span><span class="auto-tag manual">руками</span></div>
       <p class="sec-sub">Тезис жив, пока не опровергнут. <b>Что делать:</b> впиши тикер позиции — агент сформулирует 3 конкретных условия, при которых тезис мёртв. Дальше он сам проверяет их раз в квартал по отчётам. Сработало условие — позицию пора закрывать или пересматривать.</p>
-      <div class="bez spot"><div class="core" id="falCard">Загружаем реестр…</div></div>
+      <div class="bez spot"><div class="core" id="falCard"><div class="cs mut">Загружаем реестр…</div><div class="skel-line" style="width:76%"></div><div class="skel-line" style="width:48%"></div></div></div>
     </section>
 
     <section class="grp" id="s-committee"><div class="gh">
       <h3>Комитет и его точность</h3><span class="pct" id="comSub"></span><span class="auto-tag auto">авто · кнопка</span></div>
       <p class="sec-sub">Четыре агента (бык, медведь, адвокат дьявола, базовые ставки) дают прогнозы с вероятностями. Когда прогнозы «созревают», каждый получает счёт точности (Brier — меньше значит лучше). Через пару месяцев станет видно, кого слушать. Кнопки ниже — если не хочется ждать недельного расписания.</p>
-      <div class="bez spot"><div class="core" id="comCard">Загружаем комитет…</div></div>
+      <div class="bez spot"><div class="core" id="comCard"><div class="cs mut">Загружаем комитет…</div><div class="skel-line" style="width:84%"></div><div class="skel-line" style="width:60%"></div></div></div>
     </section>
   </div>
 
@@ -166,13 +166,13 @@
     <section class="grp" id="s-baserates"><div class="gh">
       <h3>Базовые ставки: что бывает после таких событий</h3><span class="pct" id="brSub"></span><span class="auto-tag manual">одна кнопка</span></div>
       <p class="sec-sub">Ты описываешь ситуацию («срез гайденса дважды + инсайдеры покупают») — система отвечает, что <i>обычно</i> происходило с акциями S&amp;P 500 после похожего. Эмпирика и мнение модели показываются раздельно и помечены.</p>
-      <div class="bez spot"><div class="core" id="brCard">Загружаем…</div></div>
+      <div class="bez spot"><div class="core" id="brCard"><div class="cs mut">Загружаем…</div><div class="skel-line" style="width:80%"></div><div class="skel-line" style="width:56%"></div></div></div>
     </section>
 
     <section class="grp" id="s-capcycle"><div class="gh">
       <h3>Капитальный цикл AI: где мы</h3><span class="pct" id="ccSub"></span><span class="auto-tag auto">авто</span></div>
       <p class="sec-sub">Стадия AI-строительства по рыночным рядам (полупроводники, уран, оборудование против рынка) и фактическому капексу гиперскейлеров из их отчётов SEC. «Kill-switch 2 из 3» — предупреждение, что цикл разворачивается. Если знаешь текущую цену аренды GPU — впиши её, она дополнит картину.</p>
-      <div class="bez spot"><div class="core" id="ccCard">Загружаем…</div></div>
+      <div class="bez spot"><div class="core" id="ccCard"><div class="cs mut">Загружаем…</div><div class="skel-line" style="width:78%"></div><div class="skel-line" style="width:50%"></div></div></div>
     </section>
   </div>
 
@@ -195,5 +195,6 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/fx.js"></script>
 <script src="/lab.js"></script>
 </body></html>

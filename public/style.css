@@ -112,7 +112,8 @@ h1 b{color:var(--acc);font-weight:600}
 .search::before{content:'/';position:absolute;left:12px;top:50%;transform:translateY(-52%);color:var(--acc);font:600 12px var(--mono)}
 .ring{width:28px;height:28px;transform:rotate(-90deg);flex:0 0 28px}
 .ring .rbg{fill:none;stroke:rgba(26,28,30,.12);stroke-width:2.6}
-.ring #ringFg{fill:none;stroke:var(--acc2);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:56.55;stroke-dashoffset:0}
+.ring #ringFg{fill:none;stroke:var(--acc2);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:56.55;stroke-dashoffset:0;
+  transition:stroke-dashoffset .3s linear}
 .iconbtn{width:36px;height:36px;border:1px solid var(--line2);background:linear-gradient(180deg,#fff,#f2f2ef);color:var(--ink2);border-radius:var(--r-k);
   font:15px var(--mono);cursor:pointer;transition:all .25s var(--ease);line-height:1;
   box-shadow:inset 0 1px 0 #fff, 0 1px 3px rgba(30,32,36,.10);
@@ -249,7 +250,7 @@ tr.earn-soon .tk::after{content:'отчёт';font:600 8.5px var(--mono);letter-s
 @keyframes pulse{0%{transform:scale(1);opacity:1}70%{transform:scale(3);opacity:0}100%{transform:scale(3);opacity:0}}
 .donut-in{display:flex;align-items:center;gap:18px}
 .donut-in svg{flex:0 0 128px}
-.dseg{transition:stroke-dasharray 1s var(--ease)}
+.dseg{transition:stroke-dasharray 1s var(--ease),stroke-width .35s var(--ease),opacity .35s var(--ease)}
 .dleg{flex:1;font:12px var(--sans)}
 .dleg div{display:flex;align-items:center;gap:8px;padding:3px 0;color:var(--ink2)}
 .dleg i{width:8px;height:8px;flex:0 0 8px;border-radius:2px}
@@ -273,7 +274,8 @@ th.sortable{cursor:pointer;transition:color .2s}
 th.sortable:hover{color:var(--acc)}
 th .arr{display:inline-block;width:11px;color:var(--acc);font-size:9px}
 td{padding:8px 11px;border-bottom:1px solid rgba(26,28,30,.055);white-space:nowrap;font-variant-numeric:tabular-nums}
-tbody tr{transition:background .2s var(--ease);animation:rowIn .45s var(--ease) both}
+tbody tr{transition:background .2s var(--ease);animation:rowIn .45s var(--ease) both;
+  scroll-margin-top:calc(var(--hh,76px) + 24px)}
 @keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
 tbody tr:hover{background:rgba(217,166,63,.07)}
 tbody tr:last-child td{border-bottom:none}
@@ -549,3 +551,116 @@ td.num.mut{color:var(--ink3)}
 #thTable .th-act{max-width:200px;white-space:normal;vertical-align:top}
 /* компактная кнопка для таблиц */
 .lab-btn.sm{padding:5px 10px;font-size:11px;letter-spacing:.02em}
+
+/* ══════════════════════════════════════════════════════════════
+   v4.2 «Грация»: плавные перетекания цвета (@property), переходы
+   между страницами (View Transitions), одометр героя, spotlight-
+   поиск, появление по скролу, скелетоны, чипы фаз, детали-анимации.
+   Всё — transform/opacity (кроме фоновых переливов скелетона и
+   прорисовки линий), всё гасится через prefers-reduced-motion.
+   ══════════════════════════════════════════════════════════════ */
+
+/* зарегистрированные цвета: смена вердикта/настроения перетекает,
+   а не мигает; без @property (старые браузеры) — просто мгновенно */
+@property --amb-a{syntax:'<color>';inherits:true;initial-value:rgba(88,127,168,.12)}
+@property --amb-b{syntax:'<color>';inherits:true;initial-value:rgba(138,107,168,.09)}
+@property --amb-c{syntax:'<color>';inherits:true;initial-value:rgba(62,148,143,.09)}
+@property --vc{syntax:'<color>';inherits:true;initial-value:#8f6a1e}
+@property --cc{syntax:'<color>';inherits:true;initial-value:#8f6a1e}
+body{transition:--amb-a 1.1s var(--ease),--amb-b 1.1s var(--ease),--amb-c 1.1s var(--ease)}
+.led{transition:--cc .6s var(--ease)}
+#verdict{transition:--vc .8s var(--ease)}
+.vchange .v-big{animation:rise .5s var(--ease)}
+.vchange .v-dots i{animation:rowIn .4s var(--ease) both}
+
+/* переходы между страницами: кроссфейд с лёгким масштабом,
+   плавучий остров «переезжает» со страницы на страницу */
+@view-transition{navigation:auto}
+.island{view-transition-name:island}
+::view-transition-group(island){animation-duration:.5s;animation-timing-function:var(--ease)}
+::view-transition-old(root){animation:vtOut .26s var(--ease) both}
+::view-transition-new(root){animation:vtIn .42s var(--ease) both}
+@keyframes vtOut{to{opacity:0;transform:scale(.994)}}
+@keyframes vtIn{from{opacity:0;transform:scale(1.008)}}
+
+/* стеклянный блик на приборе: ловит свет под курсором (только opacity) */
+.bez .core{position:relative}
+.bez .core::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(160deg,rgba(255,255,255,.6),rgba(255,255,255,0) 34%);
+  opacity:0;transition:opacity .5s var(--ease)}
+.bez:hover .core::after{opacity:.5}
+
+/* одометр главного числа: посимвольная механическая прокрутка */
+.odo{white-space:pre}
+.odo-c{display:inline-block;height:1.04em;overflow:hidden;vertical-align:top}
+.odo-w{display:block;line-height:1.04}
+.odo-w.mv{transition:transform .62s var(--ease);will-change:transform}
+.odo-w i{display:block;height:1.04em;line-height:1.04;font-style:normal}
+@keyframes odoX{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.odo.odo-x{animation:odoX .5s var(--ease)}
+
+/* spotlight: подсказки под поиском в шапке */
+#qdd{position:absolute;top:calc(100% + 8px);left:0;min-width:292px;max-width:min(380px,calc(100vw - 28px));
+  background:rgba(255,255,255,.95);-webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15);
+  border:1px solid var(--line2);border-radius:14px;box-shadow:var(--sh-float);
+  padding:6px;z-index:70;animation:ddIn .22s var(--ease) both}
+@keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.qd-cap{font:600 9.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);padding:7px 10px 4px}
+.qd{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;
+  font:12px var(--mono);color:var(--ink2);white-space:nowrap}
+.qd .qt{font-weight:600;color:var(--ink);min-width:44px}
+.qd .qd-n{overflow:hidden;text-overflow:ellipsis;max-width:150px;color:var(--ink3);font:11px var(--sans)}
+.qd .qd-px{margin-left:auto;font:600 11.5px var(--mono);font-variant-numeric:tabular-nums}
+.qd svg{width:14px;height:14px;flex:0 0 14px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.qd.on{background:rgba(217,166,63,.16)}
+.qd.on .qd-px{color:var(--ink2)}
+@media (max-width:560px){#qdd{left:auto;right:0}}
+
+/* цель прыжка из поиска: строка мягко вспыхивает бронзой */
+@keyframes pg{0%{background:rgba(217,166,63,.24)}100%{background:transparent}}
+tr.pglow td{animation:pg 1.8s var(--ease)}
+
+/* появление по скролу (классы вешает fx.js — без JS контент виден) */
+.io{opacity:0;transform:translateY(18px)}
+.io.in{opacity:1;transform:none;transition:opacity .7s var(--ease),transform .7s var(--ease)}
+
+/* стаггер динамически вставленных секций (результаты анализов) */
+.sIn{animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
+
+/* волосок прогресса чтения */
+#sprog{position:fixed;top:0;left:0;height:2px;width:0;z-index:60;pointer-events:none;
+  background:linear-gradient(90deg,var(--acc2),var(--accg));border-radius:0 1px 1px 0}
+
+/* скелетон-шиммер для считающихся секций */
+.skel-line{height:10px;border-radius:5px;margin-top:10px;
+  background:linear-gradient(90deg,rgba(26,28,30,.05) 25%,rgba(26,28,30,.10) 50%,rgba(26,28,30,.05) 75%);
+  background-size:250% 100%;animation:skelM 1.8s linear infinite}
+@keyframes skelM{from{background-position:120% 0}to{background-position:-120% 0}}
+
+/* чипы фаз прогресса (оценка акций, сканер) — стили .step из boot-экрана */
+.eq-phases{margin-top:12px}
+
+/* details раскрывается по высоте (без создания скролл-контейнера) */
+:root{interpolate-size:allow-keywords}
+details::details-content{block-size:0;overflow:clip;
+  transition:block-size .4s var(--ease),content-visibility .4s allow-discrete;transition-behavior:allow-discrete}
+details[open]::details-content{block-size:auto}
+
+/* донат: сегмент под курсором/строкой легенды выходит вперёд, прочие гаснут */
+.donut-in svg.dim .dseg{opacity:.28}
+.donut-in svg.dim .dseg.hi{opacity:1;stroke-width:16}
+
+/* «оседание»: после первого рендера автообновления больше не проигрывают
+   входные анимации — цифры и строки меняются без пере-всплытий */
+body.settled .reveal{animation:none;opacity:1}
+body.settled tbody tr{animation:none}
+
+/* доступность v4.2 */
+@media (prefers-reduced-motion:reduce){
+  @view-transition{navigation:none}
+  #sprog{display:none}
+}
+@media (prefers-reduced-transparency:reduce){
+  #qdd{background:#fbfbf9}
+  .bez .core::after{display:none}
+}

@@ -77,6 +77,7 @@ async function runScan(force){
   $('#goScan').disabled=true;$('#goScan').textContent='Сканируем…';
   $('#prog').hidden=false;$('#cacheNote').hidden=true;
   $('#progFill').style.width='0%';$('#progStep').textContent='запуск…';$('#progCounts').textContent='';
+  progPhasesInit();
   try{
     var r=await fetch('/api/equity/scan',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(paramsOf(force))});
@@ -128,9 +129,27 @@ function progPercent(){
   if(p.universeSize>0)return Math.min(48,(p.fetched||0)/p.universeSize*50);
   return 3;
 }
+/* v4.2: чипы фаз под прогресс-трубой */
+var PHASES=['prescreening','deep_analysis','news_radar','ranking','advisor'];
+function progPhasesInit(){
+  var el=document.getElementById('progPhases');
+  if(el)el.innerHTML=PHASES.map(function(p){
+    return '<span class="step" data-p="'+p+'">'+(L.phase[p]||p)+'</span>';
+  }).join('');
+}
+function progPhaseMark(ph){
+  var el=document.getElementById('progPhases');
+  if(!el||!ph)return;
+  var idx=PHASES.indexOf(ph);
+  Array.prototype.forEach.call(el.children,function(c,i){
+    c.classList.toggle('on',idx>=0&&i===idx);
+    c.classList.toggle('done',(idx>=0&&i<idx)||ph==='done');
+  });
+}
 function renderProgress(st){
   var p=st.progress||{};
   window.__lastProg=p;
+  progPhaseMark(p.phase);
   var ph=L.phase[p.phase]||p.phase;
   var txt;
   if(p.phase==='prescreening')txt='Прескрининг… '+(p.fetched||0)+'/'+(p.universeSize||'?')+' тикеров · прошло фильтр '+(p.prescreened||0);
@@ -165,6 +184,7 @@ async function loadResults(scanId,fromCache){
       +(st.undervalued!=null?' · недооценённых '+st.undervalued:'')
       +(st.failed?' · ошибок '+st.failed:'');
     renderTable();
+    FX.stagger($('#results'));
     var adv=d.advisor||'';
     $('#advisorSec').hidden=!adv;
     $('#advisor').textContent=adv;

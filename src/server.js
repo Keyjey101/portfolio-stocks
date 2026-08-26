@@ -495,7 +495,13 @@ async function handle(req, res) {
     return;
   }
 
-  res.writeHead(404).end('not found');
+  // неизвестный путь: API отвечает JSON, страницы — мягкая 404 в языке дизайна
+  if (url.startsWith('/api/')) { json(res, 404, { ok: false, error: 'not found' }); return; }
+  fs.readFile(path.join(PUB, '404.html'), (err, data) => {
+    if (err) { res.writeHead(404).end('not found'); return; }
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(data);
+  });
 }
 
 function start() {

@@ -71,8 +71,31 @@ var progState={startedAt:0,floorW:0,doneW:0,overTimer:null,rafTimer:null};
 function progStart(){
   progState.startedAt=Date.now();progState.floorW=0;
   $('#prog').hidden=false;$('#progFill').style.width='0%';
+  progPhases();
   if(progState.rafTimer)clearInterval(progState.rafTimer);
   progState.rafTimer=setInterval(progTick,100);
+}
+/* v4.2: чипы фаз под прогресс-трубой — загораются по реальным шагам SSE */
+function progPhases(){
+  var el=document.getElementById('progPhases');
+  if(!el)return;
+  el.innerHTML=STEP_W[curType].map(function(s){
+    return '<span class="step" data-p="'+s[0]+'">'+(L.step[s[0]]||s[0])+'</span>';
+  }).join('');
+}
+function progMark(run,done,all){
+  var el=document.getElementById('progPhases');
+  if(!el)return;
+  if(run!=null){
+    Array.prototype.forEach.call(el.children,function(c){
+      c.classList.toggle('on',c.dataset.p===run);
+    });
+  }
+  if(done!=null){
+    var c=el.querySelector('.step[data-p="'+done+'"]');
+    if(c)c.classList.add('done');
+  }
+  if(all)Array.prototype.forEach.call(el.children,function(c){c.classList.remove('on');c.classList.add('done')});
 }
 function progStop(pct){
   if(progState.rafTimer){clearInterval(progState.rafTimer);progState.rafTimer=null}
@@ -120,12 +143,14 @@ function onFrame(frame){
     var idx=stepIndex(STEP_W[curType],frame.step);
     if(idx>=0)progState.floorW=Math.max(progState.floorW,STEP_W[curType][idx][1]);
     progState.lastDone=frame.step;
+    progMark(null,frame.step,false);
   }
-  if(frame.step&&frame.status==='running'){progState.running=frame.step}
+  if(frame.step&&frame.status==='running'){progState.running=frame.step;progMark(frame.step,null,false)}
   if(frame.step==='decision'&&frame.status==='done'){
     var d=frame.data||{};
     $('#progStep').textContent='вердикт: '+(L.verdict[d.verdict]||d.verdict||'…');
   }
+  if(frame.step==='result')progMark(null,null,true);
 }
 
 /* ── SSE-клиент: fetch + построчный парсинг + recovery (07 §7.4) ── */
@@ -238,6 +263,8 @@ function renderResult(R,meta){
   if(fb)fb.onclick=function(){runAnalysis(R.ticker,curType,true)};
 
   $('#result').innerHTML = curType==='equity'?renderEquity(R):renderDividend(R);
+  FX.stagger($('#result'));
+  FX.drawIn($('#result'));
   document.title=(R.ticker||'тикер')+' — анализ';
 }
 function fmtHHMM(d){return d&&!isNaN(d)?d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'—'}
@@ -479,12 +506,10 @@ function sparkSvg(vals){
   var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals);
   if(mx<=mn)mx=mn+1;
   var pts=vals.map(function(v,i){
-    var x=pad+(W-2*pad)*i/(vals.length-1);
-    var y=Hh-pad-(Hh-2*pad)*(v-mn)/(mx-mn);
-    return x.toFixed(1)+','+y.toFixed(1);
-  }).join(' ');
+    return [+(pad+(W-2*pad)*i/(vals.length-1)).toFixed(1),+(Hh-pad-(Hh-2*pad)*(v-mn)/(mx-mn)).toFixed(1)];
+  });
   var upTrend=vals[vals.length-1]>=vals[0];
-  return '<svg viewBox="0 0 '+W+' '+Hh+'" width="'+W+'" height="'+Hh+'" aria-hidden="true"><polyline points="'+pts+'" fill="none" stroke="'+(upTrend?'#0e8a5f':'#c43d33')+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return '<svg viewBox="0 0 '+W+' '+Hh+'" width="'+W+'" height="'+Hh+'" aria-hidden="true"><path class="spk-line" d="'+FX.smoothPath(pts)+'" fill="none" stroke="'+(upTrend?'#0e8a5f':'#c43d33')+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 function weightStr(w){
   if(!w)return '';

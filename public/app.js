@@ -23,24 +23,38 @@ function sparkSvg(vals,w,h,t){
   if(mx-mn<1e-9){mx=mn+1}
   var pad=2,i,pts=[];
   for(i=0;i<vals.length;i++){
-    pts.push((pad+(w-2*pad)*i/(vals.length-1)).toFixed(1)+','+(h-pad-(h-2*pad)*(vals[i]-mn)/(mx-mn)).toFixed(1));
+    pts.push([+(pad+(w-2*pad)*i/(vals.length-1)).toFixed(1),+(h-pad-(h-2*pad)*(vals[i]-mn)/(mx-mn)).toFixed(1)]);
   }
   var up=vals[vals.length-1]>=vals[0],c=up?COL.g:COL.r;
+  var lx=pts[pts.length-1][0].toFixed(1),ly=pts[pts.length-1][1].toFixed(1);
+  /* v4.2: плавная кривая (Catmull-Rom→Безье) + точка «сейчас»; класс spk-line
+     подхватывается FX.drawIn() при первом рендере — линия прорисовывается */
   return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" data-s="'+JSON.stringify(vals)+'"'+(t?' data-t="'+t+'"':'')+'>'
-    +'<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+c+'" stroke-width="1.5" stroke-opacity=".85" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'<path class="spk-line" d="'+FX.smoothPath(pts)+'" fill="none" stroke="'+c+'" stroke-opacity=".85" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    +'<circle cx="'+lx+'" cy="'+ly+'" r="1.8" fill="'+c+'"/>'
     +'</svg>';
 }
 
+var lastNumVal={};
 function animateNum(el,target,fmt){
-  if(REDUCED||!el){el.textContent=fmt(target);return}
-  var t0=null,dur=1000;
+  if(REDUCED||!el){if(el)el.textContent=fmt(target);return}
+  /* v4.2: после первого рендера считаем не от нуля, а от прошлого значения —
+     автообновление мягко доезжает до новой цифры, а не «перезапускается» */
+  var from=(el.id&&lastNumVal[el.id]!=null)?lastNumVal[el.id]:0;
+  if(el.id)lastNumVal[el.id]=target;
+  if(from===target){el.textContent=fmt(target);return}
+  var t0=null,done=false,dur=1000;
+  function fin(){if(!done){done=true;el.textContent=fmt(target)}}
   function step(ts){
+    if(done)return;
     if(!t0)t0=ts;
     var p=Math.min((ts-t0)/dur,1),e=1-Math.pow(1-p,4);
-    el.textContent=fmt(target*e);
-    if(p<1)requestAnimationFrame(step);else el.textContent=fmt(target);
+    el.textContent=fmt(from+(target-from)*e);
+    if(p<1)requestAnimationFrame(step);else fin();
   }
   requestAnimationFrame(step);
+  /* страховка: если rAF заморожен (фоновой вкладкой) — значение всё равно доедет */
+  setTimeout(fin,dur+400);
 }
 
 /* ───────────── тосты ───────────── */
@@ -128,6 +142,9 @@ function boot(){
       fetchCalendar();
       fetchMacro();
       fetchMandate();
+      /* v4.2 «оседание»: после первого показа автообновления больше
+         не проигрывают входные анимации — только смена значений */
+      setTimeout(function(){document.body.classList.add('settled')},1600);
     },420);
   }).catch(function(e){
     bootTimers.forEach(clearTimeout);stopFun();
@@ -230,7 +247,7 @@ function fetchMacro(){
 }
 
 /* ───────────── рендер ───────────── */
-var DATA=null,prevPx={};
+var DATA=null,prevPx={},FIRST=true;
 
 function setMood(c){
   document.body.dataset.mood=c||'d';
@@ -267,7 +284,11 @@ function renderMast(D){
       +'<span class="hchip"><small>режим</small><b>публичный — суммы скрыты</b></span>';
     $('#heroSub').innerHTML='<b>'+t.cnt+'</b> позиций · кэш '+n(D.cashPct,1)+'% от портфеля · '+(D.posSource==='api'?'позиции — Tradernet API':'позиции — кэш, API недоступен')+' · <b class="guest-hint">ключ в шапке — вход владельца</b>';
   } else {
-    animateNum($('#heroVal'),D.total,money);
+    /* v4.2: первый показ — счётчик, дальше — одометр посимвольно */
+    var hv=$('#heroVal');
+    if(renderMast.lastTotal==null)animateNum(hv,D.total,money);
+    else if(renderMast.lastTotal!==D.total)FX.odo(hv,money(D.total),D.total>renderMast.lastTotal);
+    renderMast.lastTotal=D.total;
 
     var dayPct=t.day!==0&&D.total? t.day/(D.total-t.day)*100 : 0;
     var pnlPct=t.cost>0? t.pnl/t.cost*100 : null;
@@ -283,11 +304,18 @@ function renderMast(D){
   var v=D.verdict,vc=COL[v.c]||'#8f6a1e';
   var box=$('#verdict');
   box.style.setProperty('--vc',vc);
+  /* v4.2: вердикт не изменился — прибор не мигает; изменился — мягкое
+     перевсплытие заголовка и точек, цвет доезжает через --vc */
+  var key=v.t+'|'+(v.n!=null?v.n:'')+'|'+(v.fires||[]).map(function(f){return f.fires?1:0}).join('');
+  if(box.dataset.k===key)return;
+  box.dataset.k=key;
   var dots=(v.fires||[]).map(function(f){return '<i class="'+(f.fires?'on':'')+'"></i>'}).join('');
   box.innerHTML='<div class="v-eyebrow"><i class="led"></i>Решение системы</div>'
     +'<div class="v-big">'+esc(v.t)+'</div>'
     +(dots?'<div class="v-dots">'+dots+'</div>':'')
     +'<div class="v-sub"><b>'+(v.n!=null?v.n:'?')+' / 3</b> сигналов сработало</div>';
+  if(renderMast.hadVerdict){box.classList.remove('vchange');void box.offsetWidth;box.classList.add('vchange')}
+  renderMast.hadVerdict=true;
 }
 
 function renderSig(D){
@@ -381,6 +409,7 @@ function renderAll(){
 
   attachSort();applyFilter();
   markEarnings();
+  if(FIRST){FX.drawIn(document);FIRST=false}
 }
 
 function renderSpx(D){
@@ -389,8 +418,8 @@ function renderSpx(D){
   var w=560,h=150,pad=6,mn=Math.min.apply(null,v),mx=Math.max.apply(null,v);
   if(mx-mn<1e-9)mx=mn+1;
   var y=function(x){return h-pad-(h-2*pad)*(x-mn)/(mx-mn)};
-  var pts=v.map(function(val,i){return[(pad+(w-2*pad)*i/(v.length-1)).toFixed(1),y(val).toFixed(1)]});
-  var line=pts.map(function(p){return p.join(',')}).join(' ');
+  var pts=v.map(function(val,i){return[+(pad+(w-2*pad)*i/(v.length-1)).toFixed(1),+y(val).toFixed(1)]});
+  var line=pts.map(function(p){return p[0]+','+p[1]}).join(' ');
   var up=v[v.length-1]>=v[0],c=up?COL.g:COL.r;
   var last=y(v[v.length-1]).toFixed(1);
   var ma='';
@@ -405,7 +434,7 @@ function renderSpx(D){
     +'<stop offset="1" stop-color="'+c+'" stop-opacity="0"/></linearGradient></defs>'
     +'<polygon points="'+line+' '+(w-pad)+','+h+' '+pad+','+h+'" fill="url(#ag)"/>'
     +ma
-    +'<polyline points="'+line+'" fill="none" stroke="'+c+'" stroke-width="1.8" stroke-linejoin="round"/>'
+    +'<path class="spk-line" d="'+FX.smoothPath(pts)+'" fill="none" stroke="'+c+'" stroke-width="1.8" stroke-linejoin="round"/>'
     +'<circle class="dot" cx="'+pts[pts.length-1][0]+'" cy="'+last+'" r="3" fill="'+c+'"/>'
     +'<text x="6" y="12" fill="#757b80" font-size="9" font-family="IBM Plex Mono,monospace">'+n(mx,0)+'</text>'
     +'<text x="6" y="'+(h-4)+'" fill="#757b80" font-size="9" font-family="IBM Plex Mono,monospace">'+n(mn,0)+'</text>'
@@ -422,10 +451,10 @@ function renderDonut(D){
   var R=44,C=2*Math.PI*R,off=0,circles='',finals=[];
   segs.forEach(function(s,i){
     var frac=s.frac;
-    circles+='<circle class="dseg" data-i="'+i+'" cx="60" cy="60" r="'+R+'" fill="none" stroke="'+s.c
-      +'" stroke-width="13" stroke-dasharray="0 '+C.toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)
-      +'" transform="rotate(-90 60 60)" stroke-linecap="butt"/>';
     finals.push((frac*C-1.5).toFixed(2)+' '+C.toFixed(2));
+    circles+='<circle class="dseg" data-i="'+i+'" cx="60" cy="60" r="'+R+'" fill="none" stroke="'+s.c
+      +'" stroke-width="13" stroke-dasharray="'+(FIRST?'0 '+C.toFixed(2):finals[i])+'" stroke-dashoffset="'+(-off).toFixed(2)
+      +'" transform="rotate(-90 60 60)" stroke-linecap="butt"/>';
     off+=frac*C;
   });
   $('#donutPanel .core').innerHTML='<div class="ph">Структура портфеля '+(D.guest?'<b>· доли</b>':'<b>'+money(D.total)+'</b>')+'</div>'
@@ -440,13 +469,34 @@ function renderDonut(D){
       return '<div><i style="background:'+s.c+'"></i>'+TAGNAME[s.tag]
         +'<span class="dv"><b>'+(D.guest?'':money(s.v)+' · ')+(s.frac*100).toFixed(1)+'%</b></span></div>';
     }).join('')+'</div></div>';
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){
+  if(FIRST){
+    var ringDone=false;
+    var ringGo=function(){
+      if(ringDone)return;ringDone=true;
       $$('.dseg').forEach(function(el){
         el.setAttribute('stroke-dasharray',finals[+el.dataset.i]);
       });
+    };
+    requestAnimationFrame(function(){requestAnimationFrame(ringGo)});
+    setTimeout(ringGo,180); /* rAF может быть заморожен фоном */
+  }
+  /* v4.2: сегмент и строка легенды подсвечивают друг друга */
+  var dsvg=$('#donutPanel .donut-in svg');
+  if(dsvg){
+    var circs=$$('.dseg'),lrows=$$('#donutPanel .dleg > div');
+    function segHi(i,on){
+      dsvg.classList.toggle('dim',on);
+      circs.forEach(function(c,k){c.classList.toggle('hi',on&&k===i)});
+    }
+    circs.forEach(function(c,i){
+      c.addEventListener('pointerenter',function(){segHi(i,true)});
+      c.addEventListener('pointerleave',function(){segHi(i,false)});
     });
-  });
+    lrows.forEach(function(r,i){
+      r.addEventListener('pointerenter',function(){segHi(i,true)});
+      r.addEventListener('pointerleave',function(){segHi(i,false)});
+    });
+  }
 }
 
 function rowHtml(r,tc,i,guest){
@@ -534,7 +584,7 @@ function attachSort(){
   });
 }
 
-/* ───────────── поиск ───────────── */
+/* ───────────── поиск + spotlight ───────────── */
 var qEl=$('#q');
 function applyFilter(){
   var q=(qEl.value||'').trim().toLowerCase();
@@ -554,8 +604,122 @@ function applyFilter(){
   if(wv)$('#watchSec').classList.toggle('hide',!Array.prototype.some.call(wv.querySelectorAll('tr'),function(tr){return !tr.classList.contains('hide')}));
   $('#noRes').classList.toggle('show',!any);
 }
-qEl.addEventListener('input',applyFilter);
-qEl.addEventListener('keydown',function(e){if(e.key==='Escape'){qEl.value='';applyFilter();qEl.blur()}});
+
+/* v4.2 spotlight: под окном поиска — тикеры (цена · день), страницы,
+   действия. Живой фильтр таблиц работает как раньше; Enter по
+   выбранной подсказке прыгает к строке и подсвечивает её. */
+var dd=null,ddItems=[],ddIdx=-1;
+var DD_STATIC=[
+  {kind:'url',label:'Лаборатория аналитики',url:'/lab',key:'лаборатория lab аналитика',
+   icon:'M14 2v6a2 2 0 0 0 .24.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.75-2.96l5.51-10.08A2 2 0 0 0 10 8V2 M6.5 15h11 M8.5 2h7'},
+  {kind:'url',label:'Оценка акции',url:'/stock-analysis',key:'оценка акция фундаментал',
+   icon:'M3 17l4-6 4 3 5-7 M16 7h4v4'},
+  {kind:'url',label:'Сканер сектора',url:'/market-scanner',key:'сканер сектор scanner рынок',
+   icon:'M4 6h16M4 12h16M4 18h10'},
+  {kind:'ref',label:'Обновить данные (R)',key:'обновить refresh данные',
+   icon:'M21 12a9 9 0 1 1-2.6-6.4L21 8 M21 3v5h-5'}
+];
+function ddClose(){
+  if(dd){dd.remove();dd=null}
+  ddItems=[];ddIdx=-1;
+  qEl.setAttribute('aria-expanded','false');
+}
+function ddMark(i){
+  ddIdx=i;
+  ddItems.forEach(function(it,k){it.el.classList.toggle('on',k===i)});
+  if(ddItems[i]&&ddItems[i].el)ddItems[i].el.scrollIntoView({block:'nearest'});
+}
+function ddCommit(it){
+  ddClose();
+  if(it.kind==='tk'){
+    qEl.value=it.t;applyFilter();
+    var tr=document.querySelector('tbody tr[data-t="'+it.t+'"]');
+    if(tr){
+      tr.classList.remove('pglow');void tr.offsetWidth;tr.classList.add('pglow');
+      tr.scrollIntoView({behavior:REDUCED?'auto':'smooth',block:'center'});
+    }
+  }else if(it.kind==='url'){location.href=it.url}
+  else if(it.kind==='ref'){refresh(false)}
+}
+function ddShow(){
+  var ql=(qEl.value||'').trim().toLowerCase();
+  var items=[];
+  if(ql&&DATA){
+    var seen={},pool=[];
+    DATA.rows.forEach(function(r){if(r.ok)pool.push(r)});
+    (DATA.watch||[]).forEach(function(w){if(w.ok)pool.push(w)});
+    pool.forEach(function(p){
+      if(seen[p.t])return;seen[p.t]=1;
+      var s=p.t.toLowerCase(),no=(p.note||'').toLowerCase();
+      var sc=s.indexOf(ql)===0?0:(s.indexOf(ql)>0?1:(no.indexOf(ql)>=0?2:-1));
+      if(sc>=0)items.push({kind:'tk',t:p.t,note:p.note||'',px:p.px,day:p.day,tag:p.tag,sc:sc});
+    });
+    items.sort(function(a,b){return a.sc-b.sc||a.t.localeCompare(b.t)});
+    items=items.slice(0,7);
+    DD_STATIC.forEach(function(s){if(s.key.indexOf(ql)>=0)items.push(s)});
+  }else if(!ql){
+    items=DD_STATIC.slice();
+  }
+  if(!items.length){
+    if(dd)dd.innerHTML='<div class="qd-cap">ничего не найдено</div>';
+    return;
+  }
+  if(!dd){
+    dd=document.createElement('div');
+    dd.id='qdd';dd.setAttribute('role','listbox');
+    (qEl.closest('.search')||qEl.parentNode).appendChild(dd);
+    qEl.setAttribute('role','combobox');
+    qEl.setAttribute('aria-expanded','true');
+    dd.addEventListener('pointerdown',function(e){
+      var row=e.target.closest('.qd');
+      if(!row)return;
+      e.preventDefault();
+      var it=ddItems[+row.dataset.i];
+      if(it)ddCommit(it);
+    });
+  }
+  var html='<div class="qd-cap">'+(ql?'позиции и страницы':'быстрые действия')+'</div>';
+  html+=items.map(function(it,i){
+    if(it.kind==='tk'){
+      return '<div class="qd" role="option" data-i="'+i+'"><span class="dotc" style="--tc:'+(it.tag?TAGCOL[it.tag]:'#8f6a1e')+'"></span>'
+        +'<span class="qt">'+esc(it.t)+'</span><span class="qd-n">'+esc(it.note||'')+'</span>'
+        +'<span class="qd-px">'+(it.px!=null?n(it.px):'')+' <span class="'+cls(it.day)+'">'+sign(it.day)+'</span></span></div>';
+    }
+    return '<div class="qd" role="option" data-i="'+i+'"><svg viewBox="0 0 24 24"><path d="'+it.icon+'"/></svg>'
+      +'<span class="qd-n" style="color:var(--ink);font-weight:600">'+esc(it.label)+'</span></div>';
+  }).join('');
+  dd.innerHTML=html;
+  ddItems=items.map(function(it,i){
+    it.el=dd.querySelector('.qd[data-i="'+i+'"]');
+    return it;
+  });
+  ddIdx=-1;
+}
+document.addEventListener('pointerdown',function(e){
+  if(dd&&!e.target.closest('.search'))ddClose();
+});
+qEl.addEventListener('input',function(){applyFilter();ddShow()});
+qEl.addEventListener('focus',ddShow);
+qEl.addEventListener('blur',function(){setTimeout(function(){if(document.activeElement!==qEl)ddClose()},140)});
+qEl.addEventListener('keydown',function(e){
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    if(ddItems.length){
+      e.preventDefault();
+      var delta=e.key==='ArrowDown'?1:-1;
+      var start=(ddIdx<0&&delta<0)?0:ddIdx; /* ArrowUp «из ничего» — на последний элемент */
+      ddMark((start+delta+ddItems.length)%ddItems.length);
+    }
+    return;
+  }
+  if(e.key==='Enter'){
+    if(dd&&ddIdx>=0&&ddItems[ddIdx]){e.preventDefault();ddCommit(ddItems[ddIdx])}
+    return;
+  }
+  if(e.key==='Escape'){
+    if(dd){ddClose();return}
+    qEl.value='';applyFilter();qEl.blur();
+  }
+});
 
 /* ───────────── автообновление ───────────── */
 var endT=0,fetching=false;
